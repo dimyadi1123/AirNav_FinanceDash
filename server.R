@@ -40,6 +40,14 @@ server <- function(input, output) {
     read_excel('pendapatan_airlines.xlsx')  
   })
   
+  df_npl <- reactive({
+    read_excel('npl.xlsx')
+  })
+  
+  df_acp <- reactive({
+    read_excel('acp.xlsx')
+  })
+  
   ## DASHBOARD UTAMA
   
   
@@ -487,5 +495,560 @@ server <- function(input, output) {
       ))
   })
   
-}
+  # Data Produksi Enroute
+  prod_enroute <- reactive({
+    df_produksi_airlines() %>%  # Tambahkan () jika df_produksi_airlines adalah reactive
+      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.") %>%
+      select(starts_with("ENCDOM"), starts_with("ENCINTL"), starts_with("ENCOFG")) %>%
+      pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "produksi") %>%
+      mutate(kategori = recode(kategori, ENCDOM = "DOM", ENCINTL = "INTL", ENCOFG = "OFG"),
+             bulan = factor(bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
+      filter(!is.na(bulan))
+  })
+  
+  # Data Produksi Terminal Navigation
+  prod_tnc <- reactive({
+    df_produksi_airlines() %>%  # Tambahkan () jika df_produksi_airlines adalah reactive
+      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.") %>%
+      select(starts_with("TNCDOM"), starts_with("TNCINTL")) %>%
+      pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "produksi") %>%
+      mutate(kategori = recode(kategori, TNCDOM = "DOM", TNCINTL = "INTL"),
+             bulan = factor(bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
+      filter(!is.na(bulan))
+  })
+  
+  # Plot Produksi Enroute
+  output$prod_enroute_plot <- renderPlot({
+    ggplot(prod_enroute(), aes(x = bulan, y = produksi, fill = kategori)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      scale_fill_manual(values = c("DOM" = "blue", "INTL" = "green", "OFG" = "orange")) +
+      labs(title = "Produksi Enroute (RU)",
+           x = "Bulan", y = "Produksi (RU)", fill = "Kategori") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  })
+  
+  # Plot Produksi Terminal Navigation
+  output$prod_tnc_plot <- renderPlot({
+    ggplot(prod_tnc(), aes(x = bulan, y = produksi, fill = kategori)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      scale_fill_manual(values = c("DOM" = "blue", "INTL" = "green")) +
+      labs(title = "Produksi Terminal Navigation (RU)",
+           x = "Bulan", y = "Produksi (RU)", fill = "Kategori") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  })
+  
+  # Data Penjualan Enroute
+  jual_enroute <- reactive({
+    df_penjualan_airlines() %>%  # Tambahkan () jika df_penjualan_airlines adalah reactive
+      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.") %>%
+      select(starts_with("ENCDOM"), starts_with("ENCINTL"), starts_with("ENCOFG")) %>%
+      pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "penjualan") %>%
+      mutate(kategori = recode(kategori, ENCDOM = "DOM", ENCINTL = "INTL", ENCOFG = "OFG"),
+             bulan = factor(bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
+      filter(!is.na(bulan))
+  })
+  
+  # Data Penjualan Terminal Navigation
+  jual_tnc <- reactive({
+    df_penjualan_airlines() %>%  # Tambahkan () jika df_penjualan_airlines adalah reactive
+      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.") %>%
+      select(starts_with("TNCDOM"), starts_with("TNCINTL")) %>%
+      pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "penjualan") %>%
+      mutate(kategori = recode(kategori, TNCDOM = "DOM", TNCINTL = "INTL"),
+             bulan = factor(bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
+      filter(!is.na(bulan))
+  })
+  
+  # Plot Penjualan Enroute
+  output$jual_enroute_plot <- renderPlot({
+    ggplot(jual_enroute(), aes(x = bulan, y = penjualan, fill = kategori)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      scale_fill_manual(values = c("DOM" = "blue", "INTL" = "green", "OFG" = "orange")) +
+      labs(title = "Penjualan Enroute (RU)",
+           x = "Bulan", y = "Penjualan (RU)", fill = "Kategori") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  })
+  
+  # Plot Penjualan Terminal Navigation
+  output$jual_tnc_plot <- renderPlot({
+    ggplot(jual_tnc(), aes(x = bulan, y = penjualan, fill = kategori)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      scale_fill_manual(values = c("DOM" = "blue", "INTL" = "green")) +
+      labs(title = "Penjualan Terminal Navigation (RU)",
+           x = "Bulan", y = "Penjualan (RU)", fill = "Kategori") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  })
+  
+  # Data Pendapatan Enroute
+  dapat_enroute <- reactive({
+    df_pendapatan_airlines() %>%  # Tambahkan () jika df_pendapatan_airlines adalah reactive
+      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.") %>%
+      select(starts_with("ENCDOM"), starts_with("ENCINTL"), starts_with("ENCOFG")) %>%
+      pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "pendapatan") %>%
+      mutate(kategori = recode(kategori, ENCDOM = "DOM", ENCINTL = "INTL", ENCOFG = "OFG"),
+             bulan = factor(bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
+      filter(!is.na(bulan))
+  })
+  
+  # Data Pendapatan Terminal Navigation
+  dapat_tnc <- reactive({
+    df_pendapatan_airlines() %>%  # Tambahkan () jika df_pendapatan_airlines adalah reactive
+      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.") %>%
+      select(starts_with("TNCDOM"), starts_with("TNCINTL")) %>%
+      pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "pendapatan") %>%
+      mutate(kategori = recode(kategori, TNCDOM = "DOM", TNCINTL = "INTL"),
+             bulan = factor(bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
+      filter(!is.na(bulan))
+  })
+  
+  # Plot Pendapatan Enroute
+  output$dapat_enroute_plot <- renderPlot({
+    ggplot(dapat_enroute(), aes(x = bulan, y = pendapatan, fill = kategori)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      scale_fill_manual(values = c("DOM" = "blue", "INTL" = "green", "OFG" = "orange")) +
+      labs(title = "Pendapatan Enroute (RU)",
+           x = "Bulan", y = "Pendapatan (RU)", fill = "Kategori") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  })
+  
+  # Plot Pendapatan Terminal Navigation
+  output$dapat_tnc_plot <- renderPlot({
+    ggplot(dapat_tnc(), aes(x = bulan, y = pendapatan, fill = kategori)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      scale_fill_manual(values = c("DOM" = "blue", "INTL" = "green")) +
+      labs(title = "Pendapatan Terminal Navigation (RU)",
+           x = "Bulan", y = "Pendapatan (RU)", fill = "Kategori") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  })
+  
+  # Reactive data filter
+  npl_data <- reactive({
+    req(df_npl())  # Ensure the data is loaded
+    df_npl() %>%
+      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.")
+  })
+  
+  output$late_0_30 <- renderValueBox({
+    late_0_30 <- sum(npl_data()$KETERLAMBATAN_0_30_HARI, na.rm = TRUE)
+    valueBox(
+      value = format(late_0_30, big.mark = ","),
+      subtitle = "Keterlambatan 0-30 Hari",
+      icon = icon("clock"),
+      color = "blue"
+    )
+  })
+  
+  # Similar modifications for other value boxes
+  output$late_31_180 <- renderValueBox({
+    late_31_180 <- sum(npl_data()$KETERLAMBATAN_31_180_HARI, na.rm = TRUE)
+    valueBox(
+      value = format(late_31_180, big.mark = ","),
+      subtitle = "Keterlambatan 31-180 Hari",
+      icon = icon("clock"),
+      color = "green"
+    )
+  })
+  
+  # Value Box: Total Keterlambatan 181-270 Hari
+  output$late_181_270 <- renderValueBox({
+    late_181_270 <- sum(npl_data()$KETERLAMBATAN_181_270_HARI, na.rm = TRUE)
+    valueBox(
+      value = format(late_181_270, big.mark = ","),
+      subtitle = "Keterlambatan 31-180 Hari",
+      icon = icon("clock"),
+      color = "green"
+    )
+  })
+  
+  # Value Box: Total Keterlambatan 270 Hari Lebih
+  output$late_270_more <- renderValueBox({
+    late_270_more <- sum(npl_data()$KETERLAMBATAN_270_HARI_LEBIH, na.rm = TRUE)
+    valueBox(
+      value = format(late_270_more, big.mark = ","),
+      subtitle = "Keterlambatan 31-180 Hari",
+      icon = icon("clock"),
+      color = "green"
+    )
+  })
+  
+  # ACP
+  
+  # Reactive data filter
+  acp_data <- reactive({
+    req(df_acp())  # Ensure the data is loaded
+    df_acp() %>%
+      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.")
+  })
+  
+  # Reactive untuk mendapatkan nilai ACP terbaru
+  latest_acp <- reactive({
+    # Ambil data customer yang di-filter
+    customer_data <- acp_data()
+    
+    # Urutan nama kolom dari ACP_JANUARI ke ACP_DESEMBER
+    acp_columns <- grep("^ACP_", names(customer_data), value = TRUE)  # Dapatkan kolom ACP
+    acp_values <- as.numeric(customer_data[1, acp_columns])  # Ambil nilai dalam kolom ACP
+    
+    # Cari nilai terbaru yang tidak nol, dari DESEMBER ke JANUARI
+    latest_value <- rev(acp_values[acp_values > 0])[1]
+    
+    if (is.na(latest_value)) {
+      return(0)  # Jika tidak ada nilai valid, kembalikan 0
+    } else {
+      return(latest_value)
+    }
+  })
+  
+  output$recent_acp <- renderValueBox({
+    valueBox(
+      format(latest_acp(), big.mark = ","),
+      subtitle = "ACP Terbaru",
+      color = "blue"
+    )
+  })
+  
+  kolektabilitas <- reactive({
+    acp <- latest_acp()
+    
+    if (acp == 0) {
+      return("Tidak Beroperasi")
+    } else if (acp < 15) {
+      return("Lancar")
+    } else if (acp < 46) {
+      return("Kurang Lancar")
+    } else if (acp < 76) {
+      return("Diragukan")
+    } else {
+      return("Macet")
+    }
+  })
 
+  output$kolektabilitas_piutang <- renderValueBox({
+    category <- kolektabilitas()  # Dapatkan kategori kolektabilitas
+    
+    # Tentukan warna berdasarkan kategori
+    box_color <- switch(category,
+                        "Tidak Beroperasi" = "gray",
+                        "Lancar" = "green",
+                        "Kurang Lancar" = "yellow",
+                        "Diragukan" = "orange",
+                        "Macet" = "red")
+    
+    valueBox(
+      value = category,  # Menampilkan kategori kolektabilitas
+      subtitle = "Kolektabilitas Piutang",
+      color = box_color  # Warna sesuai kategori
+    )
+  })
+  
+  rasio_maskapai <- reactive({
+    req(df_detail_tahunan())  # Ensure the data is loaded
+    df_detail_tahunan() %>%
+      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.")
+  })
+  
+  # Data untuk ditampilkan di tabel
+  rasio_data <- reactive({
+    data <- rasio_maskapai()
+    data.frame(
+      Tahun = 2021:2024,
+      Rasio = c(data$RASIO_2021, data$RASIO_2022, data$RASIO_2023, data$RASIO_2024)
+    )
+  })
+  
+  # Output tabel
+  output$rasio_table <- renderTable({
+    rasio_data()
+  }, rownames = FALSE)
+  
+  # Output plot
+  output$rasio_plot <- renderPlot({
+    data <- rasio_data()
+    plot(data$Tahun, data$Rasio, type = "o", col = "blue", lwd = 2,
+         xlab = "Tahun", ylab = "Rasio Perputaran Piutang",
+         main = "Tren Rasio Perputaran Piutang")
+    grid()
+  })
+  
+  npl_percent <- reactive({
+    req(df_npl())  
+    npl_filtered <- df_npl() %>% filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.")
+    npl_filtered$NPL_PERCENT
+  })
+  
+  output$npl_percent <- renderValueBox({
+    valueBox(
+      format(npl_percent(),  nsmall = 2),
+      subtitle = "Non Performing Loan",
+      color = "blue"
+    )
+  })
+  
+  top_10_piutang_tahunan <- reactive({
+    req(df_detail_tahunan())  # Pastikan data tersedia
+    
+    # Filter data untuk kepemilikan domestik
+    df_filtered <- df_detail_tahunan() %>%
+      filter(KEPEMILIKAN == "DOMESTIK") %>%
+      select(NAMA_CUSTOMER, KEPEMILIKAN, PIUTANG_2024)
+    
+    # Urutkan berdasarkan piutang terbesar
+    df_sorted <- df_filtered %>%
+      arrange(desc(PIUTANG_2024))
+    
+    # Ambil top 10 dan hitung total piutang lainnya
+    top_10 <- head(df_sorted, 10)
+    others <- df_sorted[-(1:10), ]  # Data di luar top 10
+    total_others <- sum(others$PIUTANG_2024, na.rm = TRUE)
+    
+    # Tambahkan baris untuk "Airline Lainnya"
+    top_10 <- rbind(
+      top_10,
+      data.frame(
+        NAMA_CUSTOMER = "Airline Lainnya",
+        KEPEMILIKAN = "DOMESTIK",  # Sesuaikan dengan kolom asli
+        PIUTANG_2024 = total_others
+      )
+    )
+    
+    return(top_10)
+  })
+  
+  output$top10_piutang_thn <- renderTable({
+    top_10_piutang_tahunan()  # Hasil dari reactive
+  }, striped = TRUE, bordered = TRUE, hover = TRUE)
+  
+  top10_piutang_bln <- reactive({
+    req(df_piutang())  # Pastikan data tersedia
+    
+    # Filter data untuk kepemilikan domestik
+    df_filtered <- df_piutang() %>%
+      filter(KEPEMILIKAN == "DOMESTIK") %>%
+      select(NAMA_CUSTOMER, RESTRUK_DESEMBER, NONRESTRUK_DESEMBER, TOTAL_DESEMBER)
+    
+    # Urutkan berdasarkan TOTAL_DESEMBER terbesar
+    df_sorted <- df_filtered %>%
+      arrange(desc(TOTAL_DESEMBER))
+    
+    # Ambil top 10 dan hitung total airline lainnya
+    top_10 <- head(df_sorted, 10)
+    others <- df_sorted[-(1:10), ]  # Data di luar top 10
+    total_others <- others %>%
+      summarise(
+        RESTRUK_DESEMBER = sum(RESTRUK_DESEMBER, na.rm = TRUE),
+        NONRESTRUK_DESEMBER = sum(NONRESTRUK_DESEMBER, na.rm = TRUE),
+        TOTAL_DESEMBER = sum(TOTAL_DESEMBER, na.rm = TRUE)
+      )
+    
+    # Tambahkan baris untuk "Airline Lainnya"
+    others_row <- data.frame(
+      NAMA_CUSTOMER = "Airline Lainnya",
+      RESTRUK_DESEMBER = total_others$RESTRUK_DESEMBER,
+      NONRESTRUK_DESEMBER = total_others$NONRESTRUK_DESEMBER,
+      TOTAL_DESEMBER = total_others$TOTAL_DESEMBER
+    )
+    
+    top_10 <- rbind(top_10, others_row)
+    
+    return(top_10)
+  })
+  
+  output$tabel_top10_piutang_bln <- renderDataTable({
+    top10_piutang_bln()
+  })
+  
+  top10_penerimaan_bln <- reactive({
+    req(df_penerimaan())  # Pastikan data tersedia
+    
+    # Filter data untuk kepemilikan domestik
+    df_filtered <- df_penerimaan() %>%
+      filter(KEPEMILIKAN == "DOMESTIK") %>%
+      select(NAMA_CUSTOMER, KEPEMILIKAN, DESEMBER)
+    
+    # Urutkan berdasarkan kolom DESEMBER
+    df_sorted <- df_filtered %>%
+      arrange(desc(DESEMBER))
+    
+    # Ambil top 10 dan hitung total airline lainnya
+    top_10 <- head(df_sorted, 10)
+    others <- df_sorted[-(1:10), ]  # Data di luar top 10
+    total_others <- others %>%
+      summarise(DESEMBER = sum(DESEMBER, na.rm = TRUE))
+    
+    # Tambahkan baris untuk "Airline Lainnya"
+    others_row <- data.frame(
+      NAMA_CUSTOMER = "Airline Lainnya",
+      KEPEMILIKAN = "DOMESTIK",
+      DESEMBER = total_others$DESEMBER
+    )
+    
+    # Gabungkan top 10 dengan total airline lainnya
+    top_10 <- rbind(top_10, others_row)
+    
+    return(top_10)
+  })
+  
+  output$tabel_penerimaan_bulanan <- renderDataTable({
+    top10_penerimaan_bln()
+  })
+  
+  produksi_top10 <- reactive({
+    req(df_produksi_airlines())  # Pastikan data tersedia
+    
+    # Filter data untuk kepemilikan domestik dan variabel yang relevan
+    df_filtered <- df_produksi_airlines() %>%
+      filter(KEPEMILIKAN == "DOMESTIK") %>%
+      select(
+        NAMA_CUSTOMER, KEPEMILIKAN,
+        ENCDOM_DES, ENCINTL_DES, ENCOFG_DES, TNCDOM_DES, TNCINTL_DES
+      )
+    
+    # Tambahkan kolom total produksi untuk peringkat
+    df_filtered <- df_filtered %>%
+      mutate(TOTAL_PRODUKSI = ENCDOM_DES + ENCINTL_DES + ENCOFG_DES + TNCDOM_DES + TNCINTL_DES)
+    
+    # Urutkan berdasarkan total produksi
+    df_sorted <- df_filtered %>%
+      arrange(desc(TOTAL_PRODUKSI))
+    
+    # Ambil Top 10 maskapai
+    top_10 <- head(df_sorted, 10)
+    
+    # Hitung total produksi maskapai lainnya
+    others <- df_sorted[-(1:10), ]  # Data di luar Top 10
+    total_others <- others %>%
+      summarise(
+        ENCDOM_DES = sum(ENCDOM_DES, na.rm = TRUE),
+        ENCINTL_DES = sum(ENCINTL_DES, na.rm = TRUE),
+        ENCOFG_DES = sum(ENCOFG_DES, na.rm = TRUE),
+        TNCDOM_DES = sum(TNCDOM_DES, na.rm = TRUE),
+        TNCINTL_DES = sum(TNCINTL_DES, na.rm = TRUE),
+        TOTAL_PRODUKSI = sum(TOTAL_PRODUKSI, na.rm = TRUE)
+      )
+    
+    # Tambahkan baris untuk "Airline Lainnya"
+    others_row <- data.frame(
+      NAMA_CUSTOMER = "Airline Lainnya",
+      KEPEMILIKAN = "DOMESTIK",
+      ENCDOM_DES = total_others$ENCDOM_DES,
+      ENCINTL_DES = total_others$ENCINTL_DES,
+      ENCOFG_DES = total_others$ENCOFG_DES,
+      TNCDOM_DES = total_others$TNCDOM_DES,
+      TNCINTL_DES = total_others$TNCINTL_DES,
+      TOTAL_PRODUKSI = total_others$TOTAL_PRODUKSI
+    )
+    
+    # Gabungkan top 10 dengan airline lainnya
+    top_10 <- rbind(top_10, others_row)
+    
+    return(top_10)
+  })
+  
+  # Output tabel di UI
+  output$produksi_top10_bln <- renderDataTable({
+    produksi_top10()
+  })
+  
+  # Reactive data untuk Top 10 Pendapatan Maskapai
+  penjualan_top10 <- reactive({
+    req(df_penjualan_airlines())  # Pastikan data tersedia
+    
+    # Filter data untuk kepemilikan DOMESTIK
+    df_filtered <- df_penjualan_airlines() %>%
+      filter(KEPEMILIKAN == "DOMESTIK") %>%
+      select(NAMA_CUSTOMER, KEPEMILIKAN, 
+             ENCDOM_DES, ENCINTL_DES, ENCOFG_DES, TNCDOM_DES, TNCINTL_DES)
+    
+    # Hitung total pendapatan untuk masing-masing maskapai
+    df_filtered <- df_filtered %>%
+      mutate(TOTAL_PENJUALAN = ENCDOM_DES + ENCINTL_DES + ENCOFG_DES + TNCDOM_DES + TNCINTL_DES)
+    
+    # Urutkan berdasarkan total pendapatan terbesar
+    df_sorted <- df_filtered %>%
+      arrange(desc(TOTAL_PENJUALAN))
+    
+    # Ambil Top 10 maskapai
+    top_10 <- head(df_sorted, 10)
+    
+    # Hitung total pendapatan maskapai lainnya
+    others <- df_sorted[-(1:10), ]  # Data di luar Top 10
+    total_others <- colSums(others[, c("ENCDOM_DES", "ENCINTL_DES", "ENCOFG_DES", "TNCDOM_DES", "TNCINTL_DES")], na.rm = TRUE)
+    
+    # Tambahkan baris untuk "Airline Lainnya"
+    others_row <- data.frame(
+      NAMA_CUSTOMER = "Airline Lainnya",
+      KEPEMILIKAN = "DOMESTIK",
+      ENCDOM_DES = total_others["ENCDOM_DES"],
+      ENCINTL_DES = total_others["ENCINTL_DES"],
+      ENCOFG_DES = total_others["ENCOFG_DES"],
+      TNCDOM_DES = total_others["TNCDOM_DES"],
+      TNCINTL_DES = total_others["TNCINTL_DES"],
+      TOTAL_PENJUALAN = sum(total_others, na.rm = TRUE)
+    )
+    
+    # Gabungkan Top 10 dengan "Airline Lainnya"
+    top_10 <- rbind(top_10, others_row)
+    
+    return(top_10)
+  })
+  
+  # Output tabel di UI
+  output$penjualan_top10_bln <- renderDataTable({
+    penjualan_top10()
+  })
+  
+  # Reactive data untuk Top 10 Pendapatan Maskapai
+  pendapatan_top10 <- reactive({
+    req(df_pendapatan_airlines())  # Pastikan data tersedia
+    
+    # Filter data untuk kepemilikan DOMESTIK
+    df_filtered <- df_pendapatan_airlines() %>%
+      filter(KEPEMILIKAN == "DOMESTIK") %>%
+      select(NAMA_CUSTOMER, KEPEMILIKAN, 
+             ENCDOM_DES, ENCINTL_DES, ENCOFG_DES, TNCDOM_DES, TNCINTL_DES)
+    
+    # Hitung total pendapatan untuk masing-masing maskapai
+    df_filtered <- df_filtered %>%
+      mutate(TOTAL_PENDAPATAN = ENCDOM_DES + ENCINTL_DES + ENCOFG_DES + TNCDOM_DES + TNCINTL_DES)
+    
+    # Urutkan berdasarkan total pendapatan terbesar
+    df_sorted <- df_filtered %>%
+      arrange(desc(TOTAL_PENDAPATAN))
+    
+    # Ambil Top 10 maskapai
+    top_10 <- head(df_sorted, 10)
+    
+    # Hitung total pendapatan maskapai lainnya
+    others <- df_sorted[-(1:10), ]  # Data di luar Top 10
+    total_others <- colSums(others[, c("ENCDOM_DES", "ENCINTL_DES", "ENCOFG_DES", "TNCDOM_DES", "TNCINTL_DES")], na.rm = TRUE)
+    
+    # Tambahkan baris untuk "Airline Lainnya"
+    others_row <- data.frame(
+      NAMA_CUSTOMER = "Airline Lainnya",
+      KEPEMILIKAN = "DOMESTIK",
+      ENCDOM_DES = total_others["ENCDOM_DES"],
+      ENCINTL_DES = total_others["ENCINTL_DES"],
+      ENCOFG_DES = total_others["ENCOFG_DES"],
+      TNCDOM_DES = total_others["TNCDOM_DES"],
+      TNCINTL_DES = total_others["TNCINTL_DES"],
+      TOTAL_PENDAPATAN = sum(total_others, na.rm = TRUE)
+    )
+    
+    # Gabungkan Top 10 dengan "Airline Lainnya"
+    top_10 <- rbind(top_10, others_row)
+    
+    return(top_10)
+  })
+  
+  # Output tabel di UI
+  output$pendapatan_top10_bln <- renderDataTable({
+    pendapatan_top10()
+  })
+  
+}
