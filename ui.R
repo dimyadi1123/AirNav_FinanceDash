@@ -14,7 +14,7 @@ css <- function(){
         top: -20;
         width: 100%;
         z-index: 1000;
-        background-color: #007bff;
+        background-color: #3B7DA5 ;
         box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
         height: 60px;
         display: flex;
@@ -24,11 +24,10 @@ css <- function(){
       }
 
       .title-container {
-        display: flex;
-        align-items: center;
-        justify-content: center; /* Menempatkan elemen di tengah secara horizontal */
-        color: white; /* Mengubah warna teks di header */
-        padding-top: 10px; /* Memberikan jarak ke bawah */
+        text-align: center; /* Pusatkan teks secara horizontal */
+        color: white; /* Warna teks */
+        padding: 10px 0; /* Tambahkan jarak atas dan bawah */
+        position: relative; /* Untuk memungkinkan penyesuaian vertikal */
       }
 
       .title-container h1 {
@@ -163,11 +162,21 @@ css <- function(){
 
 # UI
 ui <- dashboardPage(
-  dashboardHeader(
-    title = tagList(
-      tags$div(class = "title-container", h1("Dashboard AirNav"))
-    )
-  ),
+    dashboardHeader(
+      title = tagList(
+        tags$div(
+          class = "title-container",
+          tags$h1(
+            tags$a(
+              href = "https://www.airnavindonesia.co.id/",  # URL tujuan
+              "Dashboard AirNav",                           # Teks yang ditampilkan
+              target = "_blank",                            # Buka di tab baru
+              style = "text-decoration: none; color: white;" # Hilangkan garis bawah dan ubah warna teks
+            )
+          )
+        )
+      )
+    ),
     dashboardSidebar(
       sidebarMenu(
         menuItem("UTAMA", tabName = "utama", icon = icon("money-bill")),
