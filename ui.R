@@ -90,6 +90,11 @@ css <- function(){
         overflow-y: auto; /* Allow scrolling of content */
         z-index: 998; /* Ensure content is below header */
       }
+      
+      .small-value-box .value {
+        font-size: 1.5rem; /* Sesuaikan ukuran teks */
+        white-space: nowrap;
+      }
 
       /* Responsive adjustments */
       @media (max-width: 1200px) {
@@ -155,6 +160,7 @@ css <- function(){
           font-size: 16px;
         }
       }
+      
     "))
   )
 }
@@ -189,10 +195,18 @@ ui <- dashboardPage(
     tabItems(
       tabItem(tabName = "utama",
               h1("Dashboard Utama"),
-              h2("Penerimaan"),
               fluidRow(
-                valueBoxOutput("total_penerimaan_asing", width = 4),  
-                valueBoxOutput("total_penerimaan_domestik", width = 4)
+                # Left side: Penerimaan section
+                column(6,  # Takes up 6/12 of the row width
+                       h2("Penerimaan"),  # Header for Penerimaan
+                       column(12, valueBoxOutput("total_penerimaan_asing", width = 12)),  # Value Box 1
+                       column(12, valueBoxOutput("total_penerimaan_domestik", width = 12))  # Value Box 2
+                ),
+                
+                column(6,  # Takes up 6/12 of the row width
+                       h2("Piutang"),  # Header for Piutang
+                       plotOutput("pie_chart")  # Pie chart
+                )
               ),
               h2("Total Enroute dan Terminal Navigation"),
               fluidRow(
@@ -205,7 +219,6 @@ ui <- dashboardPage(
               ),
               h2("Visualisasi"),
               fluidRow(
-                plotOutput("pie_chart"),  
                 plotOutput("line_chart"),
                 plotOutput("bar_chart"),
                 plotOutput("jual_terima_chart"),
@@ -213,41 +226,76 @@ ui <- dashboardPage(
               )
       ),
       tabItem(tabName = "top10",
-              h1("Dashboard TOP 10"),
+              h1("Dashboard TOP 10 Maskapai"),
+              # Filter Kepemilikan
               fluidRow(
-                tableOutput("top10_piutang_thn")  # Output tabel untuk top 10 customer
+                column(
+                  width = 4,
+                  selectInput(
+                    inputId = "filter_kepemilikan", 
+                    label = "Pilih Kepemilikan:", 
+                    choices = c("DOMESTIK", "ASING"), 
+                    selected = "DOMESTIK"
+                  )
+                ),
+                column(
+                  width = 4,
+                  selectInput(
+                    "filter_tahun_piutang", 
+                    "Pilih Tahun:", 
+                    choices = c("2020","2021","2022","2023", "2024", "2025"),
+                    selected = "2024"
+                  )
+                ),
+                column(
+                  width = 4,
+                  selectInput(
+                    "filter_bulan", 
+                    "Pilih bulan:", 
+                    choices = c("JANUARI","FEBRUARI","MARET","APRIL", "MEI", "JUNI", "JULI", "AGUSTUS", "SEPTEMBER", "OKTOBER", "NOVEMBER", "DESEMBER"),
+                    selected = "DESEMBER"
+                  )
+                )
               ),
+              h2("TOP 10 Piutang Customer Pertahun"),
               fluidRow(
                 box(
-                  title = "Tabel Top 10 Piutang Bulanan",
+                  width = 12,
+                  dataTableOutput("top10_piutang_thn")
+                )
+              ),
+              h2(textOutput("judul_top10_piutang_thn")),
+              fluidRow(
+                box(
+                  title = "Top 10 Piutang Bulanan",
                   width = 12,
                   dataTableOutput("tabel_top10_piutang_bln")
                 )
               ),
               fluidRow(
                 box(
-                  title = "Tabel Top 10 Penerimaan Bulanan",
+                  title = "Top 10 Penerimaan Bulanan",
                   width = 12,
                   dataTableOutput("tabel_penerimaan_bulanan")
                 )
               ),
               fluidRow(
                 box(
-                  title = "Tabel Top 10 Produksi Maskapai (Desember)",
+                  title = "Top 10 Produksi Maskapai",
                   width = 12,
                   dataTableOutput("produksi_top10_bln")
                 )
               ),
               fluidRow(
                 box(
-                  title = "Tabel Top 10 Penjualan Maskapai (Desember)",
+                  title = "Top 10 Penjualan Maskapai",
                   width = 12,
                   dataTableOutput("penjualan_top10_bln")
                 )
               ),
               fluidRow(
                 box(
-                  title = "Tabel Top 10 Pendapatan Maskapai (Desember)",
+                  title = "Top 10 Pendapatan Maskapai",
                   width = 12,
                   dataTableOutput("pendapatan_top10_bln")
                 )
@@ -255,6 +303,31 @@ ui <- dashboardPage(
       ),
       tabItem(tabName = "maskapai",
               h1("Dashboard Maskapai"),
+              h2("Profil Maskapai"),
+              fluidRow(
+                column(12, uiOutput("airlineprofile"))
+              ),
+              # Adding some custom CSS for layout adjustments
+              tags$style(HTML("
+                .profile-container {
+                  display: grid;
+                  grid-template-columns: 70% 30%;;  
+                  gap: 10px;
+                  margin: 20px 0;
+                }
+                .profile-item {
+                  padding: 10px;
+                  font-size: 1.2em;
+                }
+                .profile-item strong {
+                  display: inline-block;
+                  min-width: 150px;  /* Adjust width for consistent label alignment */
+                  font-weight: bold;
+                }
+                .profile-item .value {
+                  word-wrap: break-word;
+                }
+              ")),
               h2("Aging Time"),
               fluidRow(
                 valueBoxOutput("late_0_30", width = 3),  
