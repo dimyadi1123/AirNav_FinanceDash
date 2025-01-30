@@ -9,7 +9,7 @@ library(ggplot2)
 library(ggrepel)
 
 # SERVER
-server <- function(input, output) {
+server <- function(input, output, session) {
   
   # LOAD FILE EXCEL
   df_piutang <- reactive({
@@ -54,7 +54,6 @@ server <- function(input, output) {
   
   ## DASHBOARD UTAMA
   
-  
   # TOTAL PENERIMAAN
   total_penerimaan_kepemilikan <- reactive({
     df_detail_tahunan() %>%
@@ -88,6 +87,52 @@ server <- function(input, output) {
       color = "green"
     ) %>% 
       tagAppendAttributes(class = "small-value-box")
+  })
+  
+  # PIECHART PIUTANG
+  piechart_piutang <- reactive({
+    df_piutang() %>%
+      group_by(KEPEMILIKAN) %>%
+      summarise(
+        total_restrukturasi = sum(as.numeric(RESTRUK_DESEMBER), na.rm = TRUE),
+        total_non_restrukturasi = sum(as.numeric(NONRESTRUK_DESEMBER), na.rm = TRUE)
+      ) %>%
+      pivot_longer(cols = starts_with("total"), names_to = "group", values_to = "value") %>%
+      mutate(
+        group = recode(group,
+                       "total_restrukturasi" = "Restrukturasi",
+                       "total_non_restrukturasi" = "Non-Restrukturasi"),
+        label = paste(KEPEMILIKAN, group, sep = " - "),
+        csum = rev(cumsum(rev(value))),
+        pos = value / 2 + lead(csum, default = 0),
+        percentage = value / sum(value) * 100,
+        rupiah = paste0("Rp", comma(value))
+      )
+  })
+  
+  # OUTPUT VISUAL PIECHART PIUTANG
+  output$pie_chart <- renderPlot({
+    data <- piechart_piutang()
+    
+    ggplot(data, aes(x = "", y = value, fill = label)) +
+      geom_col(width = 1, color = "white") +
+      coord_polar(theta = "y") +
+      scale_fill_brewer(palette = "Pastel1") +
+      geom_label_repel(
+        aes(
+          y = pos,
+          label = paste0(label, "\n", sprintf("%.2f%%", percentage), "\n", rupiah)
+        ),
+        size = 4, nudge_x = 1, show.legend = FALSE
+      ) +
+      guides(fill = guide_legend(title = "Kategori - Kepemilikan")) +
+      theme_void() +  # Menghapus grid
+      theme(
+        plot.background = element_rect(fill = "transparent", color = NA),  
+        panel.background = element_rect(fill = "transparent", color = NA), 
+        legend.background = element_rect(fill = "transparent", color = NA) 
+      ) +
+      labs(title = "Proporsi Piutang secara Keseluruhan")
   })
   
   # TOTAL PENDAPATAN AIRLINES
@@ -170,53 +215,6 @@ server <- function(input, output) {
     )
   })
   
-  # PIECHART PIUTANG
-  piechart_piutang <- reactive({
-    df_piutang() %>%
-      group_by(KEPEMILIKAN) %>%
-      summarise(
-        total_restrukturasi = sum(as.numeric(RESTRUK_DESEMBER), na.rm = TRUE),
-        total_non_restrukturasi = sum(as.numeric(NONRESTRUK_DESEMBER), na.rm = TRUE)
-      ) %>%
-      pivot_longer(cols = starts_with("total"), names_to = "group", values_to = "value") %>%
-      mutate(
-        group = recode(group,
-                       "total_restrukturasi" = "Restrukturasi",
-                       "total_non_restrukturasi" = "Non-Restrukturasi"),
-        label = paste(KEPEMILIKAN, group, sep = " - "),
-        csum = rev(cumsum(rev(value))),
-        pos = value / 2 + lead(csum, default = 0),
-        percentage = value / sum(value) * 100,
-        rupiah = paste0("Rp", comma(value))
-      )
-  })
-  
-  # OUTPUT VISUAL PIECHART PIUTANG
-  output$pie_chart <- renderPlot({
-    data <- piechart_piutang()
-    
-    ggplot(data, aes(x = "", y = value, fill = label)) +
-      geom_col(width = 1, color = "white") +
-      coord_polar(theta = "y") +
-      scale_fill_brewer(palette = "Pastel1") +
-      geom_label_repel(
-        aes(
-          y = pos,
-          label = paste0(label, "\n", sprintf("%.2f%%", percentage), "\n", rupiah)
-        ),
-        size = 4, nudge_x = 1, show.legend = FALSE
-      ) +
-      guides(fill = guide_legend(title = "Kategori - Kepemilikan")) +
-      theme_void() +  # Menghapus grid
-      theme(
-        plot.background = element_rect(fill = "transparent", color = NA),  
-        panel.background = element_rect(fill = "transparent", color = NA), 
-        legend.background = element_rect(fill = "transparent", color = NA) 
-      ) +
-      labs(title = "Proporsi Restrukturasi dan Non-Restrukturasi per Kepemilikan")
-  })
-  
-  
   # TOTAL PIUTANG, PENJUALAN, PENERIMAAN TAHUNAN
   total_p3 <- reactive({
     df <- df_detail_tahunan()
@@ -224,6 +222,14 @@ server <- function(input, output) {
     num_cols <- c("PIUTANG_2020", "PIUTANG_2021", "PIUTANG_2022", "PIUTANG_2023", "PIUTANG_2024",
                   "PENJUALAN_2020", "PENJUALAN_2021", "PENJUALAN_2022", "PENJUALAN_2023", "PENJUALAN_2024",
                   "PENERIMAAN_2020", "PENERIMAAN_2021", "PENERIMAAN_2022", "PENERIMAAN_2023", "PENERIMAAN_2024")
+    
+    # Filter berdasarkan pilihan kepemilikan
+    if (!("DOMESTIK" %in% input$kepemilikan_filter)) {
+      df <- df %>% filter(KEPEMILIKAN != "DOMESTIK")
+    }
+    if (!("ASING" %in% input$kepemilikan_filter)) {
+      df <- df %>% filter(KEPEMILIKAN != "ASING")
+    }
     
     df[num_cols] <- lapply(df[num_cols], function(x) {
       x <- gsub("[^0-9.-]", "", x) 
@@ -282,6 +288,8 @@ server <- function(input, output) {
   # TOTAL PIUTANG PERBULAN
   total_piutang_perbulan <- reactive({
     df_piutang() %>%
+      # Filter berdasarkan kepemilikan
+      filter(KEPEMILIKAN %in% input$kepemilikan_filter) %>%
       pivot_longer(
         cols = starts_with("RESTRUK") | starts_with("NONRESTRUK"),
         names_to = c("kategori", "bulan"),
@@ -326,14 +334,17 @@ server <- function(input, output) {
   # Mengolah data penjualan
   total_penjualan <- reactive({
     df_penjualan() %>%
+      # Filter berdasarkan kepemilikan
+      filter(KEPEMILIKAN %in% input$kepemilikan_filter) %>%
       select(JANUARI:DESEMBER) %>%
       summarise(across(JANUARI:DESEMBER, \(x) sum(x, na.rm = TRUE))) %>%
       pivot_longer(cols = everything(), names_to = "bulan", values_to = "total_penjualan")
   })
   
-  # Mengolah data penerimaan
   total_penerimaan <- reactive({
     df_penerimaan() %>%
+      # Filter berdasarkan kepemilikan
+      filter(KEPEMILIKAN %in% input$kepemilikan_filter) %>%
       select(JANUARI:DESEMBER) %>%
       summarise(across(JANUARI:DESEMBER, \(x) sum(x, na.rm = TRUE))) %>%
       pivot_longer(cols = everything(), names_to = "bulan", values_to = "total_penerimaan")
@@ -394,6 +405,9 @@ server <- function(input, output) {
     )
     
     df <- df_produksi_airlines()
+    
+    df <- df %>% filter(KEPEMILIKAN %in% input$kepemilikan_filter)
+    
     missing_columns <- setdiff(columns, colnames(df))
     if (length(missing_columns) > 0) {
       stop(paste("Kolom berikut tidak ditemukan di dataframe:", paste(missing_columns, collapse = ", ")))
@@ -644,19 +658,27 @@ server <- function(input, output) {
   })
   
   ## DASHBOARD DETAIL MASKAPAI
+  # Mengisi pilihan maskapai dari df_profil
+  observe({
+    updateSelectizeInput(
+      session,
+      inputId = "nama_customer",
+      choices = df_profil()$NAMA_CUSTOMER,
+      server = TRUE
+    )
+  })
   
   # Profil Maskapaoi
   output$airlineprofile <- renderUI({
     req(df_profil())
     
-    # Filter the data for "ASI PUJIASTUTI AVIATION, PT."
     airline_profile <- df_profil() %>%
-      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.")
+      filter(NAMA_CUSTOMER == input$nama_customer)
     
     # Create the profile layout using grid
     tagList(
       wellPanel(
-        h3("Profil ASI PUJIASTUTI AVIATION, PT."),
+        h3(input$nama_customer),
         div(class = "profile-container", 
             div(class = "profile-item", 
                 tags$strong("Nama Customer"), 
@@ -691,6 +713,113 @@ server <- function(input, output) {
     )
   })
   
+  # ACP
+  acp_data <- reactive({
+    req(df_acp())  # Ensure the data is loaded
+    df_acp() %>%
+      filter(NAMA_CUSTOMER == input$nama_customer)
+  })
+  
+  latest_acp <- reactive({
+    customer_data <- acp_data()
+    
+    acp_columns <- grep("^ACP_", names(customer_data), value = TRUE)  
+    acp_values <- as.numeric(customer_data[1, acp_columns])  
+    
+    latest_value <- rev(acp_values[acp_values > 0])[1]
+    
+    if (is.na(latest_value)) {
+      return(0) 
+    } else {
+      return(latest_value)
+    }
+  })
+  
+  output$recent_acp <- renderValueBox({
+    valueBox(
+      format(latest_acp(), big.mark = ","),
+      subtitle = "ACP Terbaru",
+      color = "blue"
+    )
+  })
+  
+  kolektabilitas <- reactive({
+    acp <- latest_acp()
+    
+    if (acp == 0) {
+      return("Tidak Beroperasi")
+    } else if (acp < 15) {
+      return("Lancar")
+    } else if (acp < 46) {
+      return("Kurang Lancar")
+    } else if (acp < 76) {
+      return("Diragukan")
+    } else {
+      return("Macet")
+    }
+  })
+  
+  output$kolektabilitas_piutang <- renderValueBox({
+    category <- kolektabilitas()  # Dapatkan kategori kolektabilitas
+    
+    # Tentukan warna berdasarkan kategori
+    box_color <- switch(category,
+                        "Tidak Beroperasi" = "lightblue",
+                        "Lancar" = "green",
+                        "Kurang Lancar" = "yellow",
+                        "Diragukan" = "orange",
+                        "Macet" = "red")
+    
+    valueBox(
+      value = category,  # Menampilkan kategori kolektabilitas
+      subtitle = "Kolektabilitas Piutang",
+      color = box_color  # Warna sesuai kategori
+    )
+  })
+  
+  rasio_maskapai <- reactive({
+    req(df_detail_tahunan())  # Ensure the data is loaded
+    df_detail_tahunan() %>%
+      filter(NAMA_CUSTOMER == input$nama_customer)
+  })
+  
+  # Data untuk ditampilkan di tabel
+  rasio_data <- reactive({
+    data <- rasio_maskapai()
+    data.frame(
+      Tahun = 2021:2024,
+      Rasio = c(data$RASIO_2021, data$RASIO_2022, data$RASIO_2023, data$RASIO_2024)
+    )
+  })
+  
+  # Output tabel
+  output$rasio_table <- renderTable({
+    rasio_data()
+  }, rownames = FALSE)
+  
+  # Output plot
+  output$rasio_plot <- renderPlot({
+    data <- rasio_data()
+    plot(data$Tahun, data$Rasio, type = "o", col = "blue", lwd = 2,
+         xlab = "Tahun", ylab = "Rasio Perputaran Piutang",
+         main = "Tren Rasio Perputaran Piutang")
+    grid()
+  })
+  
+  npl_percent <- reactive({
+    req(df_npl())  
+    npl_filtered <- df_npl() %>% filter(NAMA_CUSTOMER == input$nama_customer)
+    npl_filtered$NPL_PERCENT
+  })
+  
+  output$npl_percent <- renderValueBox({
+    valueBox(
+      format(npl_percent(),  nsmall = 2),
+      subtitle = "Non Performing Loan",
+      color = "blue"
+    )
+  })
+  
   # VISUALISASI P3 ENC TNC CHART
   output$p3Chart <- renderPlot({
     ggplot(data_vis_p3(), aes(x = Month, y = Total, fill = Category)) +
@@ -707,10 +836,10 @@ server <- function(input, output) {
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
   })
   
+  
   output$trend_piutang_chart <- renderPlot({
-    # Membuat dataset tren piutang untuk maskapai tertentu
     trend_piutang_maskapai <- df_detail_tahunan() %>%
-      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.") %>%  
+      filter(NAMA_CUSTOMER == input$nama_customer) %>%  
       pivot_longer(
         cols = starts_with("PIUTANG_"),  
         names_to = "tahun",              
@@ -720,22 +849,73 @@ server <- function(input, output) {
       filter(tahun >= 2020 & tahun <= 2024) %>%  
       select(ID_CUSTOMER, NAMA_CUSTOMER, tahun, piutang)  
     
-    # Membuat plot tren piutang
     ggplot(trend_piutang_maskapai, aes(x = tahun, y = piutang)) +
       geom_line(color = "blue", size = 1) +  
       geom_point(color = "red", size = 3) +  
       labs(
-        title = "Trend Piutang ASI PUJIASTUTI AVIATION, PT.",
+        title = "Trend Piutang {nama_customer}",
         x = "Tahun",
         y = "Piutang (IDR)"
       ) +
       theme_minimal()  # Menggunakan tema minimal
   })
+  
+  # Aging
+  npl_data <- reactive({
+    req(df_npl())  # Ensure the data is loaded
+    df_npl() %>%
+      filter(NAMA_CUSTOMER == input$nama_customer)
+  })
+  
+  output$late_0_30 <- renderValueBox({
+    late_0_30 <- sum(npl_data()$KETERLAMBATAN_0_30_HARI, na.rm = TRUE)
+    valueBox(
+      value = format(late_0_30, big.mark = ","),
+      subtitle = "Keterlambatan 0-30 Hari",
+      icon = icon("clock"),
+      color = "blue"
+    )
+  })
+  
+  # Similar modifications for other value boxes
+  output$late_31_180 <- renderValueBox({
+    late_31_180 <- sum(npl_data()$KETERLAMBATAN_31_180_HARI, na.rm = TRUE)
+    valueBox(
+      value = format(late_31_180, big.mark = ","),
+      subtitle = "Keterlambatan 31-180 Hari",
+      icon = icon("clock"),
+      color = "green"
+    )
+  })
+  
+  # Value Box: Total Keterlambatan 181-270 Hari
+  output$late_181_270 <- renderValueBox({
+    late_181_270 <- sum(npl_data()$KETERLAMBATAN_181_270_HARI, na.rm = TRUE)
+    valueBox(
+      value = format(late_181_270, big.mark = ","),
+      subtitle = "Keterlambatan 181-270 Hari",
+      icon = icon("clock"),
+      color = "green"
+    )
+  })
+  
+  # Value Box: Total Keterlambatan 270 Hari Lebih
+  output$late_270_more <- renderValueBox({
+    late_270_more <- sum(npl_data()$KETERLAMBATAN_270_HARI_LEBIH, na.rm = TRUE)
+    valueBox(
+      value = format(late_270_more, big.mark = ","),
+      subtitle = "Keterlambatan > 270 Hari",
+      icon = icon("clock"),
+      color = "green"
+    )
+  })
+  
+  # Piutang maskapai
   observe({
     req(df_piutang())  
     
     total_piutang <- df_piutang() %>%
-      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.") %>%
+      filter(NAMA_CUSTOMER == input$nama_customer) %>%
       summarise(
         total_restrukturasi = sum(c(RESTRUK_JANUARI, RESTRUK_FEBRUARI, RESTRUK_MARET, RESTRUK_APRIL, RESTRUK_MEI, RESTRUK_JUNI,
                                     RESTRUK_JULI, RESTRUK_AGUSTUS, RESTRUK_SEPTEMBER, RESTRUK_OKTOBER, RESTRUK_NOVEMBER, RESTRUK_DESEMBER), na.rm = TRUE),
@@ -743,13 +923,24 @@ server <- function(input, output) {
                                  NONRESTRUK_JULI, NONRESTRUK_AGUSTUS, NONRESTRUK_SEPTEMBER, NONRESTRUK_OKTOBER, NONRESTRUK_NOVEMBER, NONRESTRUK_DESEMBER), na.rm = TRUE)
       )
     
-    # Update nilai di dalam value box
-    output$restruk_value <- renderText({
-      paste0("Rp ", format(total_piutang$total_restrukturasi, big.mark = ","))
+    format_currency <- function(x) {
+      paste0("Rp ", format(x, big.mark = ".", decimal.mark = ",", scientific = FALSE))
+    }
+    
+    output$restruk_value_box <- renderValueBox({
+      valueBox(
+        value = format_currency(total_piutang$total_restrukturasi),
+        subtitle = "Total Piutang Restrukturisasi",
+        color = "blue"
+      )
     })
     
-    output$nonrestruk_value <- renderText({
-      paste0("Rp ", format(total_piutang$total_nonrestruk, big.mark = ","))
+    output$nonrestruk_value_box <- renderValueBox({
+      valueBox(
+        value = format_currency(total_piutang$total_nonrestruk),
+        subtitle = "Total Piutang Non-Restrukturisasi",
+        color = "green"
+      )
     })
   })
   
@@ -759,7 +950,7 @@ server <- function(input, output) {
     
     # Proses data untuk trend piutang bulanan
     trend_piutang_bulanan <- df_piutang() %>%  
-      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.") %>%  
+      filter(NAMA_CUSTOMER == input$nama_customer) %>%  
       select(ID_CUSTOMER, NAMA_CUSTOMER, starts_with("TOTAL_")) %>%
       pivot_longer(
         cols = starts_with("TOTAL_"),   
@@ -773,7 +964,7 @@ server <- function(input, output) {
       geom_line(color = "blue", size = 1) +  
       geom_point(color = "red", size = 3) +  
       labs(
-        title = "Trend Piutang per Bulan (ASI PUJIASTUTI AVIATION, PT.)",
+        title = "Trend Piutang per Bulan {input$nama_customer}",
         x = "Bulan",
         y = "Total Piutang (IDR)"
       ) +
@@ -787,7 +978,7 @@ server <- function(input, output) {
   # Data Produksi Enroute
   prod_enroute <- reactive({
     df_produksi_airlines() %>%  # Tambahkan () jika df_produksi_airlines adalah reactive
-      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.") %>%
+      filter(NAMA_CUSTOMER == input$nama_customer) %>%
       select(starts_with("ENCDOM"), starts_with("ENCINTL"), starts_with("ENCOFG")) %>%
       pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "produksi") %>%
       mutate(kategori = recode(kategori, ENCDOM = "DOM", ENCINTL = "INTL", ENCOFG = "OFG"),
@@ -798,7 +989,7 @@ server <- function(input, output) {
   # Data Produksi Terminal Navigation
   prod_tnc <- reactive({
     df_produksi_airlines() %>%  # Tambahkan () jika df_produksi_airlines adalah reactive
-      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.") %>%
+      filter(NAMA_CUSTOMER == input$nama_customer) %>%
       select(starts_with("TNCDOM"), starts_with("TNCINTL")) %>%
       pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "produksi") %>%
       mutate(kategori = recode(kategori, TNCDOM = "DOM", TNCINTL = "INTL"),
@@ -831,7 +1022,7 @@ server <- function(input, output) {
   # Data Penjualan Enroute
   jual_enroute <- reactive({
     df_penjualan_airlines() %>%  # Tambahkan () jika df_penjualan_airlines adalah reactive
-      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.") %>%
+      filter(NAMA_CUSTOMER == input$nama_customer) %>%
       select(starts_with("ENCDOM"), starts_with("ENCINTL"), starts_with("ENCOFG")) %>%
       pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "penjualan") %>%
       mutate(kategori = recode(kategori, ENCDOM = "DOM", ENCINTL = "INTL", ENCOFG = "OFG"),
@@ -842,7 +1033,7 @@ server <- function(input, output) {
   # Data Penjualan Terminal Navigation
   jual_tnc <- reactive({
     df_penjualan_airlines() %>%  # Tambahkan () jika df_penjualan_airlines adalah reactive
-      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.") %>%
+      filter(NAMA_CUSTOMER == input$nama_customer) %>%
       select(starts_with("TNCDOM"), starts_with("TNCINTL")) %>%
       pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "penjualan") %>%
       mutate(kategori = recode(kategori, TNCDOM = "DOM", TNCINTL = "INTL"),
@@ -875,7 +1066,7 @@ server <- function(input, output) {
   # Data Pendapatan Enroute
   dapat_enroute <- reactive({
     df_pendapatan_airlines() %>%  # Tambahkan () jika df_pendapatan_airlines adalah reactive
-      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.") %>%
+      filter(NAMA_CUSTOMER == input$nama_customer) %>%
       select(starts_with("ENCDOM"), starts_with("ENCINTL"), starts_with("ENCOFG")) %>%
       pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "pendapatan") %>%
       mutate(kategori = recode(kategori, ENCDOM = "DOM", ENCINTL = "INTL", ENCOFG = "OFG"),
@@ -886,7 +1077,7 @@ server <- function(input, output) {
   # Data Pendapatan Terminal Navigation
   dapat_tnc <- reactive({
     df_pendapatan_airlines() %>%  # Tambahkan () jika df_pendapatan_airlines adalah reactive
-      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.") %>%
+      filter(NAMA_CUSTOMER == input$nama_customer) %>%
       select(starts_with("TNCDOM"), starts_with("TNCINTL")) %>%
       pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "pendapatan") %>%
       mutate(kategori = recode(kategori, TNCDOM = "DOM", TNCINTL = "INTL"),
@@ -915,168 +1106,4 @@ server <- function(input, output) {
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
   })
-  
-  # Reactive data filter
-  npl_data <- reactive({
-    req(df_npl())  # Ensure the data is loaded
-    df_npl() %>%
-      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.")
-  })
-  
-  output$late_0_30 <- renderValueBox({
-    late_0_30 <- sum(npl_data()$KETERLAMBATAN_0_30_HARI, na.rm = TRUE)
-    valueBox(
-      value = format(late_0_30, big.mark = ","),
-      subtitle = "Keterlambatan 0-30 Hari",
-      icon = icon("clock"),
-      color = "blue"
-    )
-  })
-  
-  # Similar modifications for other value boxes
-  output$late_31_180 <- renderValueBox({
-    late_31_180 <- sum(npl_data()$KETERLAMBATAN_31_180_HARI, na.rm = TRUE)
-    valueBox(
-      value = format(late_31_180, big.mark = ","),
-      subtitle = "Keterlambatan 31-180 Hari",
-      icon = icon("clock"),
-      color = "green"
-    )
-  })
-  
-  # Value Box: Total Keterlambatan 181-270 Hari
-  output$late_181_270 <- renderValueBox({
-    late_181_270 <- sum(npl_data()$KETERLAMBATAN_181_270_HARI, na.rm = TRUE)
-    valueBox(
-      value = format(late_181_270, big.mark = ","),
-      subtitle = "Keterlambatan 31-180 Hari",
-      icon = icon("clock"),
-      color = "green"
-    )
-  })
-  
-  # Value Box: Total Keterlambatan 270 Hari Lebih
-  output$late_270_more <- renderValueBox({
-    late_270_more <- sum(npl_data()$KETERLAMBATAN_270_HARI_LEBIH, na.rm = TRUE)
-    valueBox(
-      value = format(late_270_more, big.mark = ","),
-      subtitle = "Keterlambatan 31-180 Hari",
-      icon = icon("clock"),
-      color = "green"
-    )
-  })
-  
-  # ACP
-  
-  # Reactive data filter
-  acp_data <- reactive({
-    req(df_acp())  # Ensure the data is loaded
-    df_acp() %>%
-      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.")
-  })
-  
-  # Reactive untuk mendapatkan nilai ACP terbaru
-  latest_acp <- reactive({
-    # Ambil data customer yang di-filter
-    customer_data <- acp_data()
-    
-    # Urutan nama kolom dari ACP_JANUARI ke ACP_DESEMBER
-    acp_columns <- grep("^ACP_", names(customer_data), value = TRUE)  # Dapatkan kolom ACP
-    acp_values <- as.numeric(customer_data[1, acp_columns])  # Ambil nilai dalam kolom ACP
-    
-    # Cari nilai terbaru yang tidak nol, dari DESEMBER ke JANUARI
-    latest_value <- rev(acp_values[acp_values > 0])[1]
-    
-    if (is.na(latest_value)) {
-      return(0)  # Jika tidak ada nilai valid, kembalikan 0
-    } else {
-      return(latest_value)
-    }
-  })
-  
-  output$recent_acp <- renderValueBox({
-    valueBox(
-      format(latest_acp(), big.mark = ","),
-      subtitle = "ACP Terbaru",
-      color = "blue"
-    )
-  })
-  
-  kolektabilitas <- reactive({
-    acp <- latest_acp()
-    
-    if (acp == 0) {
-      return("Tidak Beroperasi")
-    } else if (acp < 15) {
-      return("Lancar")
-    } else if (acp < 46) {
-      return("Kurang Lancar")
-    } else if (acp < 76) {
-      return("Diragukan")
-    } else {
-      return("Macet")
-    }
-  })
-
-  output$kolektabilitas_piutang <- renderValueBox({
-    category <- kolektabilitas()  # Dapatkan kategori kolektabilitas
-    
-    # Tentukan warna berdasarkan kategori
-    box_color <- switch(category,
-                        "Tidak Beroperasi" = "gray",
-                        "Lancar" = "green",
-                        "Kurang Lancar" = "yellow",
-                        "Diragukan" = "orange",
-                        "Macet" = "red")
-    
-    valueBox(
-      value = category,  # Menampilkan kategori kolektabilitas
-      subtitle = "Kolektabilitas Piutang",
-      color = box_color  # Warna sesuai kategori
-    )
-  })
-  
-  rasio_maskapai <- reactive({
-    req(df_detail_tahunan())  # Ensure the data is loaded
-    df_detail_tahunan() %>%
-      filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.")
-  })
-  
-  # Data untuk ditampilkan di tabel
-  rasio_data <- reactive({
-    data <- rasio_maskapai()
-    data.frame(
-      Tahun = 2021:2024,
-      Rasio = c(data$RASIO_2021, data$RASIO_2022, data$RASIO_2023, data$RASIO_2024)
-    )
-  })
-  
-  # Output tabel
-  output$rasio_table <- renderTable({
-    rasio_data()
-  }, rownames = FALSE)
-  
-  # Output plot
-  output$rasio_plot <- renderPlot({
-    data <- rasio_data()
-    plot(data$Tahun, data$Rasio, type = "o", col = "blue", lwd = 2,
-         xlab = "Tahun", ylab = "Rasio Perputaran Piutang",
-         main = "Tren Rasio Perputaran Piutang")
-    grid()
-  })
-  
-  npl_percent <- reactive({
-    req(df_npl())  
-    npl_filtered <- df_npl() %>% filter(NAMA_CUSTOMER == "ASI PUJIASTUTI AVIATION, PT.")
-    npl_filtered$NPL_PERCENT
-  })
-  
-  output$npl_percent <- renderValueBox({
-    valueBox(
-      format(npl_percent(),  nsmall = 2),
-      subtitle = "Non Performing Loan",
-      color = "blue"
-    )
-  })
-  
 }

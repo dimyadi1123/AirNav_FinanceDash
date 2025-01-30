@@ -217,7 +217,17 @@ ui <- dashboardPage(
                 valueBoxOutput("totalENC_pendapatan", width = 4),
                 valueBoxOutput("totalTNC_pendapatan", width = 4)
               ),
-              h2("Visualisasi"),
+              h2('Visualisasi'),
+              fluidRow(
+                column(12,
+                       checkboxGroupInput("kepemilikan_filter", 
+                                          label = "Kepemilikan:",
+                                          choices = c("Domestik" = "DOMESTIK", "Asing" = "ASING"),
+                                          selected = c("DOMESTIK", "ASING"),
+                                          inline = TRUE
+                       )  
+                    )          
+                ),
               fluidRow(
                 plotOutput("line_chart"),
                 plotOutput("bar_chart"),
@@ -303,6 +313,21 @@ ui <- dashboardPage(
       ),
       tabItem(tabName = "maskapai",
               h1("Dashboard Maskapai"),
+              fluidRow(
+                column(4,
+                       selectizeInput(
+                         inputId = "nama_customer",
+                         label = "Pilih Maskapai:",
+                         choices = NULL,  # Akan diisi server
+                         selected = "GARUDA INDONESIA PT.",  
+                         multiple = FALSE,
+                         options = list(
+                           placeholder = "Ketik untuk mencari maskapai...",
+                           create = FALSE
+                         )
+                       )
+                )
+              ),
               h2("Profil Maskapai"),
               fluidRow(
                 column(12, uiOutput("airlineprofile"))
@@ -328,7 +353,11 @@ ui <- dashboardPage(
                   word-wrap: break-word;
                 }
               ")),
-              h2("Aging Time"),
+              h2("Total Piutang"),
+              fluidRow(
+                valueBoxOutput("restruk_value_box", width = 6),
+                valueBoxOutput("nonrestruk_value_box", width = 6)
+              ), h2("Aging Value"),
               fluidRow(
                 valueBoxOutput("late_0_30", width = 3),  
                 valueBoxOutput("late_31_180", width = 3),  
@@ -338,7 +367,7 @@ ui <- dashboardPage(
               h2("Status Piutang"),
               fluidRow(
                 valueBoxOutput("recent_acp", width = 2),
-                valueBoxOutput("kolektabilitas_piutang", width = 2),
+                valueBoxOutput("kolektabilitas_piutang", width = 4),
                 valueBoxOutput("npl_percent", width = 2)
               ),
               h2("Rasio Piutang"),
@@ -357,21 +386,6 @@ ui <- dashboardPage(
               ),
               fluidRow(
                 box(
-                  title = "Total Piutang ASI PUJIASTUTI AVIATION, PT.",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 12,
-                  div(
-                    class = "value-box",  
-                    style = "text-align: center;",
-                    h3("Restrukturisasi dan Non-Restrukturisasi"),  
-                    tags$p("Restrukturisasi: ", textOutput("restruk_value")),
-                    tags$p("Non-Restrukturisasi: ", textOutput("nonrestruk_value"))
-                  )
-                )
-              ),
-              fluidRow(
-                box(
                   title = "Trend Piutang per Bulan",
                   status = "primary",
                   solidHeader = TRUE,
@@ -379,6 +393,7 @@ ui <- dashboardPage(
                   plotOutput("trend_piutang_plot")  
                 )
               ),
+              h2("Produksi, Penjualan, dan Pendapatan")
               fluidRow(
                 box(
                   title = "Produksi Enroute (RU)",
