@@ -7,6 +7,8 @@ library(tidyr)
 library(scales)
 library(ggplot2)
 library(ggrepel)
+library(reactable)
+library(plotly)
 
 # SERVER
 server <- function(input, output, session) {
@@ -103,36 +105,32 @@ server <- function(input, output, session) {
                        "total_restrukturasi" = "Restrukturasi",
                        "total_non_restrukturasi" = "Non-Restrukturasi"),
         label = paste(KEPEMILIKAN, group, sep = " - "),
-        csum = rev(cumsum(rev(value))),
-        pos = value / 2 + lead(csum, default = 0),
-        percentage = value / sum(value) * 100,
-        rupiah = paste0("Rp", comma(value))
+        percentage = round(value / sum(value) * 100, 2),
+        rupiah = paste0("Rp ", scales::comma(value))
       )
   })
   
-  # OUTPUT VISUAL PIECHART PIUTANG
-  output$pie_chart <- renderPlot({
+  output$pie_chart <- renderPlotly({
     data <- piechart_piutang()
     
-    ggplot(data, aes(x = "", y = value, fill = label)) +
-      geom_col(width = 1, color = "white") +
-      coord_polar(theta = "y") +
-      scale_fill_brewer(palette = "Pastel1") +
-      geom_label_repel(
-        aes(
-          y = pos,
-          label = paste0(label, "\n", sprintf("%.2f%%", percentage), "\n", rupiah)
-        ),
-        size = 4, nudge_x = 1, show.legend = FALSE
-      ) +
-      guides(fill = guide_legend(title = "Kategori - Kepemilikan")) +
-      theme_void() +  # Menghapus grid
-      theme(
-        plot.background = element_rect(fill = "transparent", color = NA),  
-        panel.background = element_rect(fill = "transparent", color = NA), 
-        legend.background = element_rect(fill = "transparent", color = NA) 
-      ) +
-      labs(title = "Proporsi Piutang secara Keseluruhan")
+    plot_ly(
+      data,
+      labels = ~label,
+      values = ~value,
+      type = "pie",
+      textinfo = "label+percent",
+      hoverinfo = "text",
+      text = ~paste(label, "<br>", "Rp", scales::comma(value)),
+      marker = list(
+        colors = c("#F29F58", "#AB4459", "#441752"),  # Ganti warna dengan kode hex
+        line = list(color = "#FFFFFF", width = 1)
+      )
+    ) %>%
+      layout(
+        showlegend = TRUE,
+        paper_bgcolor = 'rgba(0,0,0,0)',   # Transparan
+        plot_bgcolor = 'rgba(0,0,0,0)'    # Transparan
+      )
   })
   
   # TOTAL PENDAPATAN AIRLINES
@@ -146,18 +144,18 @@ server <- function(input, output, session) {
   
   output$totalENC_pendapatan <- renderValueBox({
     valueBox(
-      value = scales::comma(total_pendapatan_airlines()$ENC),
-      subtitle = "Total ENC (ENCDOM + ENCINTL + ENCOFG)",
-      icon = icon("chart-bar"),
+      value = scales::comma(total_pendapatan_airlines()$ENC, prefix = "Rp ", big.mark = ".", decimal.mark = ","),
+      subtitle = "Pendapatan ENC",
+      icon = icon("briefcase"),
       color = "blue"
     )
   })
   
   output$totalTNC_pendapatan <- renderValueBox({
     valueBox(
-      value = scales::comma(total_pendapatan_airlines()$TNC),
-      subtitle = "Total TNC (TNCDOM + TNCINTL)",
-      icon = icon("chart-pie"),
+      value = scales::comma(total_pendapatan_airlines()$TNC, prefix = "Rp ", big.mark = ".", decimal.mark = ","),
+      subtitle = "Pendapatan TNC",
+      icon = icon("money-bill-wave"),
       color = "green"
     )
   })
@@ -172,18 +170,18 @@ server <- function(input, output, session) {
   
   output$totalENC_penjualan <- renderValueBox({
     valueBox(
-      value = scales::comma(total_penjualan_airlines()$ENC),
-      subtitle = "Total ENC (ENCDOM + ENCINTL + ENCOFG)",
-      icon = icon("chart-bar"),
+      value = scales::comma(total_penjualan_airlines()$ENC, prefix = "Rp ", big.mark = ".", decimal.mark = ","),
+      subtitle = "Penjualan ENC",
+      icon = icon("chart-line"),
       color = "blue"
     )
   })
   
   output$totalTNC_penjualan <- renderValueBox({
     valueBox(
-      value = scales::comma(total_penjualan_airlines()$TNC),
-      subtitle = "Total TNC (TNCDOM + TNCINTL)",
-      icon = icon("chart-pie"),
+      value = scales::comma(total_penjualan_airlines()$TNC, prefix = "Rp ", big.mark = ".", decimal.mark = ","),
+      subtitle = "Penjualan TNC",
+      icon = icon("dollar-sign"),
       color = "green"
     )
   })
@@ -200,7 +198,7 @@ server <- function(input, output, session) {
   output$totalENC_produksi <- renderValueBox({
     valueBox(
       value = scales::comma(total_produksi_airlines()$ENC),
-      subtitle = "Total ENC (ENCDOM + ENCINTL + ENCOFG)",
+      subtitle = "Produksi ENC",
       icon = icon("chart-bar"),
       color = "blue"
     )
@@ -209,7 +207,7 @@ server <- function(input, output, session) {
   output$totalTNC_produksi <- renderValueBox({
     valueBox(
       value = scales::comma(total_produksi_airlines()$TNC),
-      subtitle = "Total TNC (TNCDOM + TNCINTL)",
+      subtitle = "Produksi TNC",
       icon = icon("chart-pie"),
       color = "green"
     )
@@ -268,23 +266,49 @@ server <- function(input, output, session) {
   })
   
   # VISUALISASI LINE CHART PIUTANG, PENJUALAN, DAN PENERIMAAN
-  output$line_chart <- renderPlot({
-    ggplot(total_p3_long(), aes(x = Tahun, y = Total, color = Kategori, group = Kategori)) +
-      geom_line(size = 1.5) +  
-      geom_point(size = 3) +    
+  output$line_chart <- renderPlotly({
+    # Buat plot dengan warna custom
+    p <- ggplot(total_p3_long(), aes(x = Tahun, y = Total, color = Kategori, group = Kategori)) +
+      geom_line(size = 1.5) +
+      geom_point(size = 3) +
+      scale_color_manual(
+        values = c("Piutang" = "red", "Penjualan" = "gold", "Penerimaan" = "blue")
+      ) +
       labs(
         title = "Perbandingan Piutang, Penjualan, dan Penerimaan (2020-2024)",
         x = "Tahun",
         y = "Total",
         color = "Kategori"
       ) +
-      theme_minimal() +  
+      theme_minimal() +
       theme(
-        legend.position = "top",   
-        plot.title = element_text(hjust = 0.5)  
+        legend.position = "top",
+        plot.title = element_text(hjust = 0.5)
+      )
+    
+    # Konversi ke plotly dan atur axis serta hover
+    ggplotly(p, tooltip = c("x", "y", "color")) %>%
+      layout(
+        xaxis = list(title = "Tahun"),
+        yaxis = list(
+          title = "Total (IDR)",
+          tickprefix = "Rp ",
+          ticksuffix = ",00",
+          tickformat = ",.0f"
+        ),
+        hovermode = "x unified",
+        margin = list(t = 50, b = 80)
+      ) %>%
+      style(
+        hovertemplate = paste(
+          "Tahun: %{x}",
+          "<br>Kategori: %{color}",
+          "<br>Total: Rp%{y:,.0f}",
+          "<extra></extra>"
+        )
       )
   })
-  
+
   # TOTAL PIUTANG PERBULAN
   total_piutang_perbulan <- reactive({
     df_piutang() %>%
@@ -315,10 +339,14 @@ server <- function(input, output, session) {
   })
   
   # VISUALISASI PIUTANG PERBULAN RESTRUK VS NONRESTRUK
-  output$bar_chart <- renderPlot({
-    ggplot(piutang_long(), aes(x = bulan, y = nilai, fill = kategori)) +
+  output$bar_chart <- renderPlotly({
+    # Membuat plot ggplot
+    p <- ggplot(piutang_long(), aes(x = bulan, y = nilai, fill = kategori)) +
       geom_bar(position = "dodge", stat = "identity") +
-      scale_fill_brewer(palette = "Pastel1") +
+      scale_fill_manual(
+        values = c("RESTRUK" = "skyblue", "NONRESTRUK" = "salmon"),
+        labels = c("Restrukturasi", "Non-Restrukturasi")
+      ) +
       labs(
         title = "Total Piutang per Bulan",
         x = "Bulan",
@@ -330,7 +358,30 @@ server <- function(input, output, session) {
         axis.text.x = element_text(angle = 45, hjust = 1),
         plot.title = element_text(hjust = 0.5)
       )
+    
+    # Konversi ggplot menjadi plotly untuk interaktivitas
+    ggplotly(p) %>%
+      layout(
+        title = "Total Piutang per Bulan",
+        xaxis = list(title = "Bulan"),
+        yaxis = list(
+          title = "Total Piutang (IDR)", 
+          tickprefix = "Rp ",  # Tambahkan prefix Rp
+          tickformat = ",.0f"  # Format IDR tanpa desimal
+        ),
+        hovermode = "closest",
+        margin = list(t = 50, b = 80)
+      ) %>%
+      style(
+        hovertemplate = paste(
+          "Bulan: %{x}",
+          "<br>Kategori: %{legendgroup}",
+          "<br>Total: Rp%{y:,.0f}",  # Format Rupiah pada hover
+          "<extra></extra>"
+        )
+      )
   })
+  
   # Mengolah data penjualan
   total_penjualan <- reactive({
     df_penjualan() %>%
@@ -366,13 +417,14 @@ server <- function(input, output, session) {
   })
   
   # Output untuk bar chart
-  output$jual_terima_chart <- renderPlot({
-    ggplot(comb_terima(), aes(x = bulan, y = total, fill = kategori)) +
+  output$jual_terima_chart <- renderPlotly({
+    # Membuat plot ggplot
+    p <- ggplot(comb_terima(), aes(x = bulan, y = total, fill = kategori)) +
       geom_bar(stat = "identity", position = "dodge") +
       labs(
         title = "Perbandingan Total Penjualan dan Penerimaan per Bulan",
         x = "Bulan",
-        y = "Total",
+        y = "Total (IDR)",
         fill = "Kategori"
       ) +
       scale_fill_manual(
@@ -386,7 +438,30 @@ server <- function(input, output, session) {
       theme(
         axis.text.x = element_text(angle = 45, hjust = 1)
       )
+    
+    # Konversi ggplot menjadi plotly untuk interaktivitas
+    ggplotly(p) %>%
+      layout(
+        title = "Perbandingan Total Penjualan dan Penerimaan per Bulan",
+        xaxis = list(title = "Bulan"),
+        yaxis = list(
+          title = "Total (IDR)",
+          tickprefix = "Rp ",   # Prefix rupiah
+          tickformat = ",.0f"   # Format angka tanpa desimal
+        ),
+        hovermode = "closest",
+        margin = list(t = 50, b = 80)
+      ) %>%
+      style(
+        hovertemplate = paste(
+          "Bulan: %{x}",
+          "<br>Kategori: %{legendgroup}",
+          "<br>Total: Rp%{y:,.0f}",
+          "<extra></extra>"
+        )
+      )
   })
+  
   
   # TOTAL P3 ENC TNC
   data_vis_p3 <- reactive({
@@ -418,6 +493,48 @@ server <- function(input, output, session) {
       Category = rep(c("ENCDOM", "ENCINTL", "ENCOFG", "TNCDOM", "TNCINTL"), times = 11),
       Total = total_values
     )
+  })
+  
+  # VISUALISASI P3 ENC TNC CHART
+  output$p3Chart <- renderPlotly({
+    p <- ggplot(data_vis_p3(), aes(x = Month, y = Total, fill = Category)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      labs(
+        title = "Total Per Bulan untuk Setiap Kategori",
+        x = "Bulan",
+        y = "Total (IDR)"
+      ) +
+      scale_fill_manual(values = c(
+        "ENCDOM" = "blue", 
+        "ENCINTL" = "red", 
+        "ENCOFG" = "green", 
+        "TNCDOM" = "orange", 
+        "TNCINTL" = "purple"
+      )) +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    # Konversi ggplot menjadi plotly
+    ggplotly(p) %>%
+      layout(
+        title = "Total Per Bulan untuk Setiap Kategori",
+        xaxis = list(title = "Bulan"),
+        yaxis = list(
+          title = "Total (IDR)", 
+          tickprefix = "Rp ",  # Prefix rupiah di sumbu Y
+          tickformat = ",.0f"  # Format angka tanpa desimal
+        ),
+        hovermode = "closest", 
+        margin = list(t = 50, b = 80)
+      ) %>%
+      style(
+        hovertemplate = paste(
+          "Bulan: %{x}",
+          "<br>Kategori: %{legendgroup}",
+          "<br>Total: Rp%{y:,.0f}",
+          "<extra></extra>"
+        )
+      )
   })
   
   ## DASHBOARD TABEL TOP 10
@@ -452,7 +569,13 @@ server <- function(input, output, session) {
   })
   
   output$top10_piutang_thn <- renderDataTable({
-    top_10_piutang_tahunan()
+    top_10 <- top_10_piutang_tahunan()
+    
+    # Format kolom PIUTANG_TAHUN menjadi Rupiah
+    top_10$PIUTANG_TAHUN <- scales::comma(top_10$PIUTANG_TAHUN, prefix = "Rp ", big.mark = ".", decimal.mark = ",")
+    
+    # Tampilkan DataTable
+    datatable(top_10, options = list(pageLength = 11))
   })
   
   output$judul_top10_piutang_thn <- renderText({
@@ -499,10 +622,17 @@ server <- function(input, output, session) {
   })
   
   output$tabel_top10_piutang_bln <- renderDataTable({
-    top10_piutang_bln()
+    top10 <- top10_piutang_bln()
+    
+    # Format kolom RESTRUK, NONRESTRUK, dan TOTAL menjadi Rupiah
+    top10$RESTRUK <- scales::comma(top10$RESTRUK, prefix = "Rp ", big.mark = ".", decimal.mark = ",")
+    top10$NONRESTRUK <- scales::comma(top10$NONRESTRUK, prefix = "Rp ", big.mark = ".", decimal.mark = ",")
+    top10$TOTAL <- scales::comma(top10$TOTAL, prefix = "Rp ", big.mark = ".", decimal.mark = ",")
+    
+    # Tampilkan DataTable
+    datatable(top10, options = list(pageLength = 11))
   })
   
-  # Top 10 Penerimaan Bulanan
   top10_penerimaan_bln <- reactive({
     req(df_penerimaan(), input$filter_bulan)
     
@@ -529,8 +659,15 @@ server <- function(input, output, session) {
     return(top_10)
   })
   
+  # Render DataTable untuk Penerimaan Bulanan dengan format Rupiah
   output$tabel_penerimaan_bulanan <- renderDataTable({
-    top10_penerimaan_bln()
+    top10 <- top10_penerimaan_bln()
+    
+    # Format kolom PENERIMAAN menjadi Rupiah
+    top10$PENERIMAAN <- scales::comma(top10$PENERIMAAN, prefix = "Rp ", big.mark = ".", decimal.mark = ",")
+    
+    # Tampilkan DataTable
+    datatable(top10, options = list(pageLength = 11))
   })
   
   # Produksi Bulanan
@@ -576,6 +713,7 @@ server <- function(input, output, session) {
     produksi_top10()
   })
   
+  # TOP 10 Penjualan
   penjualan_top10 <- reactive({
     req(df_penjualan_airlines(), input$filter_bulan)
     
@@ -613,8 +751,24 @@ server <- function(input, output, session) {
   })
   
   output$penjualan_top10_bln <- renderDataTable({
-    penjualan_top10()
+    top10 <- penjualan_top10()
+    
+    # Identifikasi kolom numerik yang perlu diformat
+    numerik_cols <- setdiff(colnames(top10), c("NAMA_CUSTOMER", "KEPEMILIKAN"))
+    
+    # Format setiap kolom numerik menjadi Rupiah
+    for (col in numerik_cols) {
+      if (col %in% colnames(top10)) {
+        top10[[col]] <- as.numeric(top10[[col]])  # Konversi menjadi numerik
+        top10[[col]] <- ifelse(is.na(top10[[col]]), 0, top10[[col]])  # Ganti NA dengan 0
+        top10[[col]] <- scales::comma(top10[[col]], prefix = "Rp ", big.mark = ".", decimal.mark = ",")  # Format ke Rupiah
+      }
+    }
+    
+    # Tampilkan DataTable
+    datatable(top10, options = list(pageLength = 11))
   })
+  
   
   # Pendapatan Bulanan
   pendapatan_top10 <- reactive({
@@ -654,8 +808,23 @@ server <- function(input, output, session) {
   })
   
   output$pendapatan_top10_bln <- renderDataTable({
-    pendapatan_top10()
+    top10 <- pendapatan_top10()
+    
+    # Identifikasi kolom numerik yang perlu diformat
+    numerik_cols <- setdiff(colnames(top10), c("NAMA_CUSTOMER", "KEPEMILIKAN"))
+    
+    # Format setiap kolom numerik menjadi Rupiah
+    for (col in numerik_cols) {
+      top10[[col]] <- as.numeric(top10[[col]])  # Konversi menjadi numerik
+      top10[[col]] <- ifelse(is.na(top10[[col]]), 0, top10[[col]])  # Ganti NA dengan 0
+      top10[[col]] <- scales::comma(top10[[col]], prefix = "Rp ", big.mark = ".", decimal.mark = ",")  # Format ke Rupiah
+    }
+    
+    # Tampilkan DataTable
+    datatable(top10, options = list(pageLength = 11))
   })
+  
+  
   
   ## DASHBOARD DETAIL MASKAPAI
   # Mengisi pilihan maskapai dari df_profil
@@ -739,7 +908,7 @@ server <- function(input, output, session) {
     valueBox(
       format(latest_acp(), big.mark = ","),
       subtitle = "ACP Terbaru",
-      color = "blue"
+      color = "yellow"
     )
   })
   
@@ -764,7 +933,7 @@ server <- function(input, output, session) {
     
     # Tentukan warna berdasarkan kategori
     box_color <- switch(category,
-                        "Tidak Beroperasi" = "lightblue",
+                        "Tidak Beroperasi" = "lime",
                         "Lancar" = "green",
                         "Kurang Lancar" = "yellow",
                         "Diragukan" = "orange",
@@ -786,16 +955,20 @@ server <- function(input, output, session) {
   # Data untuk ditampilkan di tabel
   rasio_data <- reactive({
     data <- rasio_maskapai()
-    data.frame(
-      Tahun = 2021:2024,
-      Rasio = c(data$RASIO_2021, data$RASIO_2022, data$RASIO_2023, data$RASIO_2024)
+    df <- data.frame(
+      Tahun = c("Rasio"),
+      `2021` = round(data$RASIO_2021, 2),
+      `2022` = round(data$RASIO_2022, 2),
+      `2023` = round(data$RASIO_2023, 2),
+      `2024` = round(data$RASIO_2024, 2)
     )
+    setNames(df, c("Tahun", "2021", "2022", "2023", "2024"))
   })
   
-  # Output tabel
-  output$rasio_table <- renderTable({
-    rasio_data()
-  }, rownames = FALSE)
+  # Output tabel dengan reactable
+  output$rasio_table <- renderReactable({
+    reactable(rasio_data())
+  })
   
   # Output plot
   output$rasio_plot <- renderPlot({
@@ -814,30 +987,14 @@ server <- function(input, output, session) {
   
   output$npl_percent <- renderValueBox({
     valueBox(
-      format(npl_percent(),  nsmall = 2),
+      value = scales::percent(npl_percent(), accuracy = 0.1),  # Format persentase dengan 1 angka desimal
       subtitle = "Non Performing Loan",
-      color = "blue"
+      color = "orange"
     )
   })
   
-  # VISUALISASI P3 ENC TNC CHART
-  output$p3Chart <- renderPlot({
-    ggplot(data_vis_p3(), aes(x = Month, y = Total, fill = Category)) +
-      geom_bar(stat = "identity", position = "dodge") +
-      labs(title = "Total Per Bulan untuk Setiap Kategori", x = "Bulan", y = "Total") +
-      scale_fill_manual(values = c(
-        "ENCDOM" = "blue", 
-        "ENCINTL" = "red", 
-        "ENCOFG" = "green", 
-        "TNCDOM" = "orange", 
-        "TNCINTL" = "purple"
-      )) +
-      theme_minimal() +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1))
-  })
-  
-  
-  output$trend_piutang_chart <- renderPlot({
+  output$trend_piutang_chart <- renderPlotly({
+    # Data untuk tren piutang maskapai
     trend_piutang_maskapai <- df_detail_tahunan() %>%
       filter(NAMA_CUSTOMER == input$nama_customer) %>%  
       pivot_longer(
@@ -849,15 +1006,90 @@ server <- function(input, output, session) {
       filter(tahun >= 2020 & tahun <= 2024) %>%  
       select(ID_CUSTOMER, NAMA_CUSTOMER, tahun, piutang)  
     
-    ggplot(trend_piutang_maskapai, aes(x = tahun, y = piutang)) +
+    # Membuat plot ggplot
+    p <- ggplot(trend_piutang_maskapai, aes(x = tahun, y = piutang)) +
       geom_line(color = "blue", size = 1) +  
       geom_point(color = "red", size = 3) +  
       labs(
-        title = "Trend Piutang {nama_customer}",
+        title = paste("Trend Piutang untuk", input$nama_customer),
         x = "Tahun",
         y = "Piutang (IDR)"
       ) +
-      theme_minimal()  # Menggunakan tema minimal
+      theme_minimal()
+    
+    # Konversi ggplot ke plotly dengan layout dan hover interaktif
+    ggplotly(p) %>%
+      layout(
+        title = paste("Trend Piutang untuk", input$nama_customer),
+        xaxis = list(title = "Tahun"),
+        yaxis = list(
+          title = "Piutang (IDR)", 
+          tickprefix = "Rp ",  
+          tickformat = ",.0f"  
+        ),
+        hovermode = "x unified",
+        margin = list(t = 50, b = 80)
+      ) %>%
+      style(
+        hovertemplate = paste(
+          "Tahun: %{x}",
+          "<br>Piutang: Rp%{y:,.0f}",
+          "<extra></extra>"
+        )
+      )
+  })
+  
+  
+  output$trend_piutang_plot <- renderPlotly({
+    # Pastikan data tersedia
+    req(df_piutang())
+    
+    # Proses data untuk trend piutang bulanan
+    trend_piutang_bulanan <- df_piutang() %>%  
+      filter(NAMA_CUSTOMER == input$nama_customer) %>%  
+      select(ID_CUSTOMER, NAMA_CUSTOMER, starts_with("TOTAL_")) %>%
+      pivot_longer(
+        cols = starts_with("TOTAL_"),   
+        names_to = "bulan",             
+        values_to = "total_piutang"     
+      ) %>%
+      mutate(bulan = gsub("TOTAL_", "", bulan)) 
+    
+    # Membuat plot dengan ggplot
+    p <- ggplot(trend_piutang_bulanan, aes(x = bulan, y = total_piutang, group = 1)) +
+      geom_line(color = "blue", size = 1) +  
+      geom_point(color = "red", size = 3) +  
+      labs(
+        title = paste("Trend Piutang per Bulan", input$nama_customer),
+        x = "Bulan",
+        y = "Total Piutang (IDR)"
+      ) +
+      theme_minimal() +
+      scale_x_discrete(limits = c(
+        "JANUARI", "FEBRUARI", "MARET", "APRIL", "MEI", "JUNI",
+        "JULI", "AGUSTUS", "SEPTEMBER", "OKTOBER", "NOVEMBER", "DESEMBER"
+      ))
+    
+    # Konversi ke plotly untuk interaktivitas
+    ggplotly(p) %>%
+      layout(
+        title = paste("Trend Piutang per Bulan", input$nama_customer),
+        xaxis = list(title = "Bulan"),
+        yaxis = list(
+          title = "Total Piutang (IDR)",
+          tickprefix = "Rp ",
+          tickformat = ",.0f"
+        ),
+        hovermode = "x unified",
+        margin = list(t = 50, b = 80)
+      ) %>%
+      style(
+        hovertemplate = paste(
+          "Bulan: %{x}",
+          "<br>Total Piutang: Rp%{y:,.0f}",
+          "<extra></extra>"
+        )
+      )
   })
   
   # Aging
@@ -873,7 +1105,7 @@ server <- function(input, output, session) {
       value = format(late_0_30, big.mark = ","),
       subtitle = "Keterlambatan 0-30 Hari",
       icon = icon("clock"),
-      color = "blue"
+      color = "green"
     )
   })
   
@@ -884,7 +1116,7 @@ server <- function(input, output, session) {
       value = format(late_31_180, big.mark = ","),
       subtitle = "Keterlambatan 31-180 Hari",
       icon = icon("clock"),
-      color = "green"
+      color = "yellow"
     )
   })
   
@@ -895,7 +1127,7 @@ server <- function(input, output, session) {
       value = format(late_181_270, big.mark = ","),
       subtitle = "Keterlambatan 181-270 Hari",
       icon = icon("clock"),
-      color = "green"
+      color = "orange"
     )
   })
   
@@ -906,7 +1138,7 @@ server <- function(input, output, session) {
       value = format(late_270_more, big.mark = ","),
       subtitle = "Keterlambatan > 270 Hari",
       icon = icon("clock"),
-      color = "green"
+      color = "red"
     )
   })
   
@@ -944,46 +1176,15 @@ server <- function(input, output, session) {
     })
   })
   
-  output$trend_piutang_plot <- renderPlot({
-    # Pastikan data tersedia
-    req(df_piutang())
-    
-    # Proses data untuk trend piutang bulanan
-    trend_piutang_bulanan <- df_piutang() %>%  
-      filter(NAMA_CUSTOMER == input$nama_customer) %>%  
-      select(ID_CUSTOMER, NAMA_CUSTOMER, starts_with("TOTAL_")) %>%
-      pivot_longer(
-        cols = starts_with("TOTAL_"),   
-        names_to = "bulan",             
-        values_to = "total_piutang"     
-      ) %>%
-      mutate(bulan = gsub("TOTAL_", "", bulan))  
-    
-    # Membuat plot menggunakan ggplot2
-    ggplot(trend_piutang_bulanan, aes(x = bulan, y = total_piutang, group = 1)) +
-      geom_line(color = "blue", size = 1) +  
-      geom_point(color = "red", size = 3) +  
-      labs(
-        title = "Trend Piutang per Bulan {input$nama_customer}",
-        x = "Bulan",
-        y = "Total Piutang (IDR)"
-      ) +
-      theme_minimal() +
-      scale_x_discrete(limits = c(
-        "JANUARI", "FEBRUARI", "MARET", "APRIL", "MEI", "JUNI",
-        "JULI", "AGUSTUS", "SEPTEMBER", "OKTOBER", "NOVEMBER", "DESEMBER"
-      ))
-  })
-  
   # Data Produksi Enroute
   prod_enroute <- reactive({
     df_produksi_airlines() %>%  # Tambahkan () jika df_produksi_airlines adalah reactive
       filter(NAMA_CUSTOMER == input$nama_customer) %>%
       select(starts_with("ENCDOM"), starts_with("ENCINTL"), starts_with("ENCOFG")) %>%
-      pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "produksi") %>%
+      pivot_longer(cols = everything(), names_to = c("kategori", "Bulan"), names_sep = "_", values_to = "produksi") %>%
       mutate(kategori = recode(kategori, ENCDOM = "DOM", ENCINTL = "INTL", ENCOFG = "OFG"),
-             bulan = factor(bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
-      filter(!is.na(bulan))
+             Bulan = factor(Bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
+      filter(!is.na(Bulan))
   })
   
   # Data Produksi Terminal Navigation
@@ -991,32 +1192,48 @@ server <- function(input, output, session) {
     df_produksi_airlines() %>%  # Tambahkan () jika df_produksi_airlines adalah reactive
       filter(NAMA_CUSTOMER == input$nama_customer) %>%
       select(starts_with("TNCDOM"), starts_with("TNCINTL")) %>%
-      pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "produksi") %>%
+      pivot_longer(cols = everything(), names_to = c("kategori", "Bulan"), names_sep = "_", values_to = "produksi") %>%
       mutate(kategori = recode(kategori, TNCDOM = "DOM", TNCINTL = "INTL"),
-             bulan = factor(bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
-      filter(!is.na(bulan))
+             Bulan = factor(Bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
+      filter(!is.na(Bulan))
   })
   
-  # Plot Produksi Enroute
-  output$prod_enroute_plot <- renderPlot({
-    ggplot(prod_enroute(), aes(x = bulan, y = produksi, fill = kategori)) +
+  ## Plot Produksi Enroute
+  output$prod_enroute_plot <- renderPlotly({
+    p <- ggplot(prod_enroute(), aes(x = Bulan, y = produksi, fill = kategori)) +
       geom_bar(stat = "identity", position = "dodge") +
       scale_fill_manual(values = c("DOM" = "blue", "INTL" = "green", "OFG" = "orange")) +
       labs(title = "Produksi Enroute (RU)",
            x = "Bulan", y = "Produksi (RU)", fill = "Kategori") +
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    ggplotly(p) %>%
+      layout(
+        title = "Produksi Enroute (RU)",
+        xaxis = list(title = "Bulan"),
+        yaxis = list(title = "Produksi (RU)"),
+        margin = list(t = 50, b = 80)
+      )
   })
   
   # Plot Produksi Terminal Navigation
-  output$prod_tnc_plot <- renderPlot({
-    ggplot(prod_tnc(), aes(x = bulan, y = produksi, fill = kategori)) +
+  output$prod_tnc_plot <- renderPlotly({
+    p <- ggplot(prod_tnc(), aes(x = Bulan, y = produksi, fill = kategori)) +
       geom_bar(stat = "identity", position = "dodge") +
       scale_fill_manual(values = c("DOM" = "blue", "INTL" = "green")) +
-      labs(title = "Produksi Terminal Navigation (RU)",
-           x = "Bulan", y = "Produksi (RU)", fill = "Kategori") +
+      labs(title = "Produksi Terminal Navigation (TMOW)",
+           x = "Bulan", y = "Produksi (TMOW)", fill = "Kategori") +
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    ggplotly(p) %>%
+      layout(
+        title = "Produksi Terminal Navigation (TMOW)",
+        xaxis = list(title = "Bulan"),
+        yaxis = list(title = "Produksi (TMOW)"),
+        margin = list(t = 50, b = 80)
+      )
   })
   
   # Data Penjualan Enroute
@@ -1024,10 +1241,10 @@ server <- function(input, output, session) {
     df_penjualan_airlines() %>%  # Tambahkan () jika df_penjualan_airlines adalah reactive
       filter(NAMA_CUSTOMER == input$nama_customer) %>%
       select(starts_with("ENCDOM"), starts_with("ENCINTL"), starts_with("ENCOFG")) %>%
-      pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "penjualan") %>%
+      pivot_longer(cols = everything(), names_to = c("kategori", "Bulan"), names_sep = "_", values_to = "penjualan") %>%
       mutate(kategori = recode(kategori, ENCDOM = "DOM", ENCINTL = "INTL", ENCOFG = "OFG"),
-             bulan = factor(bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
-      filter(!is.na(bulan))
+             Bulan = factor(Bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
+      filter(!is.na(Bulan))
   })
   
   # Data Penjualan Terminal Navigation
@@ -1035,32 +1252,58 @@ server <- function(input, output, session) {
     df_penjualan_airlines() %>%  # Tambahkan () jika df_penjualan_airlines adalah reactive
       filter(NAMA_CUSTOMER == input$nama_customer) %>%
       select(starts_with("TNCDOM"), starts_with("TNCINTL")) %>%
-      pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "penjualan") %>%
+      pivot_longer(cols = everything(), names_to = c("kategori", "Bulan"), names_sep = "_", values_to = "penjualan") %>%
       mutate(kategori = recode(kategori, TNCDOM = "DOM", TNCINTL = "INTL"),
-             bulan = factor(bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
-      filter(!is.na(bulan))
+             Bulan = factor(Bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
+      filter(!is.na(Bulan))
   })
   
   # Plot Penjualan Enroute
-  output$jual_enroute_plot <- renderPlot({
-    ggplot(jual_enroute(), aes(x = bulan, y = penjualan, fill = kategori)) +
+  output$jual_enroute_plot <- renderPlotly({
+    p <- ggplot(jual_enroute(), aes(x = Bulan, y = penjualan, fill = kategori)) +
       geom_bar(stat = "identity", position = "dodge") +
       scale_fill_manual(values = c("DOM" = "blue", "INTL" = "green", "OFG" = "orange")) +
       labs(title = "Penjualan Enroute (RU)",
            x = "Bulan", y = "Penjualan (RU)", fill = "Kategori") +
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    ggplotly(p) %>%
+      layout(
+        yaxis = list(
+          title = "Penjualan (RU)",
+          tickprefix = "Rp ",
+          tickformat = ",.0f"
+        )
+      ) %>%
+      style(hovertemplate = paste("Bulan: %{x}",
+                                  "<br>Kategori: %{color}",
+                                  "<br>Penjualan: Rp%{y:,.0f}",
+                                  "<extra></extra>"))
   })
   
   # Plot Penjualan Terminal Navigation
-  output$jual_tnc_plot <- renderPlot({
-    ggplot(jual_tnc(), aes(x = bulan, y = penjualan, fill = kategori)) +
+  output$jual_tnc_plot <- renderPlotly({
+    p <- ggplot(jual_tnc(), aes(x = Bulan, y = penjualan, fill = kategori)) +
       geom_bar(stat = "identity", position = "dodge") +
       scale_fill_manual(values = c("DOM" = "blue", "INTL" = "green")) +
-      labs(title = "Penjualan Terminal Navigation (RU)",
-           x = "Bulan", y = "Penjualan (RU)", fill = "Kategori") +
+      labs(title = "Penjualan Terminal Navigation (TMOW)",
+           x = "Bulan", y = "Penjualan (TMOW)", fill = "Kategori") +
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    ggplotly(p) %>%
+      layout(
+        yaxis = list(
+          title = "Penjualan (TMOW)",
+          tickprefix = "Rp ",
+          tickformat = ",.0f"
+        )
+      ) %>%
+      style(hovertemplate = paste("Bulan: %{x}",
+                                  "<br>Kategori: %{color}",
+                                  "<br>Penjualan: Rp%{y:,.0f}",
+                                  "<extra></extra>"))
   })
   
   # Data Pendapatan Enroute
@@ -1068,10 +1311,10 @@ server <- function(input, output, session) {
     df_pendapatan_airlines() %>%  # Tambahkan () jika df_pendapatan_airlines adalah reactive
       filter(NAMA_CUSTOMER == input$nama_customer) %>%
       select(starts_with("ENCDOM"), starts_with("ENCINTL"), starts_with("ENCOFG")) %>%
-      pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "pendapatan") %>%
+      pivot_longer(cols = everything(), names_to = c("kategori", "Bulan"), names_sep = "_", values_to = "pendapatan") %>%
       mutate(kategori = recode(kategori, ENCDOM = "DOM", ENCINTL = "INTL", ENCOFG = "OFG"),
-             bulan = factor(bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
-      filter(!is.na(bulan))
+             Bulan = factor(Bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
+      filter(!is.na(Bulan))
   })
   
   # Data Pendapatan Terminal Navigation
@@ -1079,31 +1322,144 @@ server <- function(input, output, session) {
     df_pendapatan_airlines() %>%  # Tambahkan () jika df_pendapatan_airlines adalah reactive
       filter(NAMA_CUSTOMER == input$nama_customer) %>%
       select(starts_with("TNCDOM"), starts_with("TNCINTL")) %>%
-      pivot_longer(cols = everything(), names_to = c("kategori", "bulan"), names_sep = "_", values_to = "pendapatan") %>%
+      pivot_longer(cols = everything(), names_to = c("kategori", "Bulan"), names_sep = "_", values_to = "pendapatan") %>%
       mutate(kategori = recode(kategori, TNCDOM = "DOM", TNCINTL = "INTL"),
-             bulan = factor(bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
-      filter(!is.na(bulan))
+             Bulan = factor(Bulan, levels = c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"))) %>%
+      filter(!is.na(Bulan))
   })
   
   # Plot Pendapatan Enroute
-  output$dapat_enroute_plot <- renderPlot({
-    ggplot(dapat_enroute(), aes(x = bulan, y = pendapatan, fill = kategori)) +
+  output$dapat_enroute_plot <- renderPlotly({
+    p <- ggplot(dapat_enroute(), aes(x = Bulan, y = pendapatan, fill = kategori)) +
       geom_bar(stat = "identity", position = "dodge") +
       scale_fill_manual(values = c("DOM" = "blue", "INTL" = "green", "OFG" = "orange")) +
       labs(title = "Pendapatan Enroute (RU)",
            x = "Bulan", y = "Pendapatan (RU)", fill = "Kategori") +
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    ggplotly(p) %>%
+      layout(
+        yaxis = list(
+          title = "Pendapatan (RU)",
+          tickprefix = "Rp ",
+          tickformat = ",.0f"
+        )
+      ) %>%
+      style(hovertemplate = paste("Bulan: %{x}",
+                                  "<br>Kategori: %{color}",
+                                  "<br>Pendapatan: Rp%{y:,.0f}",
+                                  "<extra></extra>"))
   })
   
   # Plot Pendapatan Terminal Navigation
-  output$dapat_tnc_plot <- renderPlot({
-    ggplot(dapat_tnc(), aes(x = bulan, y = pendapatan, fill = kategori)) +
+  output$dapat_tnc_plot <- renderPlotly({
+    p <- ggplot(dapat_tnc(), aes(x = Bulan, y = pendapatan, fill = kategori)) +
       geom_bar(stat = "identity", position = "dodge") +
       scale_fill_manual(values = c("DOM" = "blue", "INTL" = "green")) +
-      labs(title = "Pendapatan Terminal Navigation (RU)",
-           x = "Bulan", y = "Pendapatan (RU)", fill = "Kategori") +
+      labs(title = "Pendapatan Terminal Navigation (TMOW)",
+           x = "Bulan", y = "Pendapatan (TMOW)", fill = "Kategori") +
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    ggplotly(p) %>%
+      layout(
+        yaxis = list(
+          title = "Pendapatan (TMOW)",
+          tickprefix = "Rp ",
+          tickformat = ",.0f"
+        )
+      ) %>%
+      style(hovertemplate = paste("Bulan: %{x}",
+                                  "<br>Kategori: %{color}",
+                                  "<br>Pendapatan: Rp%{y:,.0f}",
+                                  "<extra></extra>"))
+  })
+  
+  output$prod_enroute_table <- renderDT({
+    prod_data_wide <- prod_enroute() %>%
+      pivot_wider(
+        names_from = kategori,
+        values_from = produksi,
+        values_fill = 0
+      ) %>%
+      arrange(match(Bulan, c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", 
+                             "JUL", "AGU", "SEP", "OKT", "NOV", "DES")))
+    
+    datatable(prod_data_wide, options = list(pageLength = 12))  # Menambahkan pagination
+  })
+  
+  # Output DataTable untuk Produksi Terminal Navigation
+  output$prod_tnc_table <- renderDT({
+    prod_data_wide <- prod_tnc() %>%
+      pivot_wider(
+        names_from = kategori,
+        values_from = produksi,
+        values_fill = 0
+      ) %>%
+      arrange(match(Bulan, c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", 
+                             "JUL", "AGU", "SEP", "OKT", "NOV", "DES")))
+    
+    datatable(prod_data_wide, options = list(pageLength = 12))  # Menambahkan pagination
+  })
+  
+  # Output DataTable untuk Penjualan Enroute
+  output$jual_enroute_table <- renderDT({
+    jual_data_wide <- jual_enroute() %>%
+      pivot_wider(
+        names_from = kategori,
+        values_from = penjualan,
+        values_fill = 0
+      ) %>%
+      arrange(match(Bulan, c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", 
+                             "JUL", "AGU", "SEP", "OKT", "NOV", "DES")))
+    
+    datatable(jual_data_wide, options = list(pageLength = 12)) %>%
+      formatCurrency(c("DOM", "INTL", "OFG"), "Rp ", digits = 0)  # Format Rupiah dengan 0 desimal
+  })
+  
+  # Output DataTable untuk Penjualan Terminal Navigation
+  output$jual_tnc_table <- renderDT({
+    jual_data_wide <- jual_tnc() %>%
+      pivot_wider(
+        names_from = kategori,
+        values_from = penjualan,
+        values_fill = 0
+      ) %>%
+      arrange(match(Bulan, c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", 
+                             "JUL", "AGU", "SEP", "OKT", "NOV", "DES")))
+    
+    datatable(jual_data_wide, options = list(pageLength = 12)) %>%
+      formatCurrency(c("DOM", "INTL"), "Rp ", digits = 0)  # Format Rupiah dengan 0 desimal
+  })
+  
+  # Output DataTable untuk Pendapatan Enroute
+  output$dapat_enroute_table <- renderDT({
+    dapat_data_wide <- dapat_enroute() %>%
+      pivot_wider(
+        names_from = kategori,
+        values_from = pendapatan,
+        values_fill = 0
+      ) %>%
+      arrange(match(Bulan, c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", 
+                             "JUL", "AGU", "SEP", "OKTO", "NOV", "DES")))
+    
+    datatable(dapat_data_wide, options = list(pageLength = 12)) %>%
+      formatCurrency(c("DOM", "INTL", "OFG"), "Rp ", digits = 0)  # Format Rupiah dengan 0 desimal
+  })
+  
+  # Output DataTable untuk Pendapatan Terminal Navigation
+  output$dapat_tnc_table <- renderDT({
+    dapat_data_wide <- dapat_tnc() %>%
+      pivot_wider(
+        names_from = kategori,
+        values_from = pendapatan,
+        values_fill = 0
+      ) %>%
+      arrange(match(Bulan, c("JAN", "FEB", "MAR", "APR", "MEI", "JUN", 
+                             "JUL", "AGU", "SEP", "OKT", "NOV", "DES")))
+    
+    datatable(dapat_data_wide, options = list(pageLength = 12)) %>%
+      formatCurrency(c("DOM", "INTL"), "Rp ", digits = 0)  # Format Rupiah dengan 0 desimal
   })
 }

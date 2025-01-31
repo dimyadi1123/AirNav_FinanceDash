@@ -2,6 +2,7 @@ library(shiny)
 library(shinydashboard)
 library(plotly)
 library(DT)
+library(reactable)
 
 # Custom CSS
 css <- function(){
@@ -205,10 +206,10 @@ ui <- dashboardPage(
                 
                 column(6,  # Takes up 6/12 of the row width
                        h2("Piutang"),  # Header for Piutang
-                       plotOutput("pie_chart")  # Pie chart
+                       plotlyOutput("pie_chart")  # Pie chart
                 )
               ),
-              h2("Total Enroute dan Terminal Navigation"),
+              h2("Penagihan"),
               fluidRow(
                 valueBoxOutput("totalENC_produksi", width = 4),
                 valueBoxOutput("totalTNC_produksi", width = 4),
@@ -221,18 +222,38 @@ ui <- dashboardPage(
               fluidRow(
                 column(12,
                        checkboxGroupInput("kepemilikan_filter", 
-                                          label = "Kepemilikan:",
+                                          label = tags$span(style = "font-weight: bold; color: #1B1833;", "Kepemilikan:"),
                                           choices = c("Domestik" = "DOMESTIK", "Asing" = "ASING"),
                                           selected = c("DOMESTIK", "ASING"),
-                                          inline = TRUE
-                       )  
-                    )          
-                ),
+                                          inline = TRUE,
+                                          width = '100%'
+                       ),
+                       tags$style(HTML("
+                        .checkbox-inline {
+                          margin-right: 15px;
+                          padding: 5px;
+                          border-radius: 10px;
+                          border: 2px solid #FF7F50;
+                        }
+                        .checkbox-inline input {
+                          margin-left: 5px;
+                        }
+                        .checkbox-group-label {
+                          font-weight: bold;
+                          font-size: 16px;
+                          color: #FF7F50;
+                        }
+                        #kepemilikan_filter {
+                          padding-left: 20px;
+                        }
+                      "))
+                )          
+              ),
               fluidRow(
-                plotOutput("line_chart"),
-                plotOutput("bar_chart"),
-                plotOutput("jual_terima_chart"),
-                plotOutput("p3Chart") 
+                plotlyOutput("line_chart"),
+                plotlyOutput("bar_chart"),
+                plotlyOutput("jual_terima_chart"),
+                plotlyOutput("p3Chart") 
               )
       ),
       tabItem(tabName = "top10",
@@ -372,8 +393,7 @@ ui <- dashboardPage(
               ),
               h2("Rasio Piutang"),
               fluidRow(
-                column(6, tableOutput("rasio_table")),  
-                column(6, plotOutput("rasio_plot"))    
+                column(12, reactableOutput("rasio_table"))
               ),
               h2("Trend Visualisasi"),
               fluidRow(
@@ -381,7 +401,7 @@ ui <- dashboardPage(
                     status = "primary", 
                     solidHeader = TRUE, 
                     width = 12,
-                    plotOutput("trend_piutang_chart")  
+                    plotlyOutput("trend_piutang_chart")  
                 )
               ),
               fluidRow(
@@ -390,59 +410,116 @@ ui <- dashboardPage(
                   status = "primary",
                   solidHeader = TRUE,
                   width = 12,
-                  plotOutput("trend_piutang_plot")  
+                  plotlyOutput("trend_piutang_plot")  
                 )
               ),
-              h2("Produksi, Penjualan, dan Pendapatan")
-              fluidRow(
-                box(
-                  title = "Produksi Enroute (RU)",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 6,  
-                  plotOutput("prod_enroute_plot")  
+              h2("Produksi, Penjualan, dan Pendapatan"),
+              tabsetPanel(
+                # Tab Visual
+                tabPanel("Visual",
+                         fluidRow(
+                           box(
+                             title = "Produksi Enroute (RU)",
+                             status = "primary",
+                             solidHeader = TRUE,
+                             width = 6,  
+                             plotlyOutput("prod_enroute_plot")  
+                           ),
+                           box(
+                             title = "Produksi Terminal Navigation",
+                             status = "primary",
+                             solidHeader = TRUE,
+                             width = 6,  
+                             plotlyOutput("prod_tnc_plot")  
+                           )
+                         ),
+                         fluidRow(
+                           box(
+                             title = "Penjualan Enroute (RU)",
+                             status = "primary",
+                             solidHeader = TRUE,
+                             width = 6,  
+                             plotlyOutput("jual_enroute_plot")  
+                           ),
+                           box(
+                             title = "Penjualan Terminal Navigation",
+                             status = "primary",
+                             solidHeader = TRUE,
+                             width = 6,  
+                             plotlyOutput("jual_tnc_plot")  
+                           )
+                         ),
+                         fluidRow(
+                           box(
+                             title = "Pendapatan Enroute (RU)",
+                             status = "primary",
+                             solidHeader = TRUE,
+                             width = 6,  
+                             plotlyOutput("dapat_enroute_plot")  
+                           ),
+                           box(
+                             title = "Pendapatan Terminal Navigation",
+                             status = "primary",
+                             solidHeader = TRUE,
+                             width = 6,  
+                             plotlyOutput("dapat_tnc_plot")
+                           )
+                         )
                 ),
-                box(
-                  title = "Produksi Terminal Navigation ",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 6,  
-                  plotOutput("prod_tnc_plot")  
-                )
-              ),
-              fluidRow(
-                box(
-                  title = "Penjualan Enroute (RU)",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 6,  
-                  plotOutput("jual_enroute_plot")  
-                ),
-                box(
-                  title = "Penjualan Terminal Navigation ",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 6,  
-                  plotOutput("jual_tnc_plot")  
-                )
-              ),
-              fluidRow(
-                box(
-                  title = "Pendapatan Enroute (RU)",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 6,  
-                  plotOutput("dapat_enroute_plot")  
-                ),
-                box(
-                  title = "Pendapatan Terminal Navigation ",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 6,  
-                  plotOutput("dapat_tnc_plot")
+                
+                # Tab Tabel
+                tabPanel("Tabel",
+                         fluidRow(
+                           box(
+                             title = "Produksi Enroute (RU)",
+                             status = "info",
+                             solidHeader = TRUE,
+                             width = 6,  
+                             DTOutput("prod_enroute_table")  # Ganti tableOutput dengan DTOutput
+                           ),
+                           box(
+                             title = "Produksi Terminal Navigation",
+                             status = "info",
+                             solidHeader = TRUE,
+                             width = 6,  
+                             DTOutput("prod_tnc_table")  # Ganti tableOutput dengan DTOutput
+                           )
+                         ),
+                         fluidRow(
+                           box(
+                             title = "Penjualan Enroute (RU)",
+                             status = "info",
+                             solidHeader = TRUE,
+                             width = 6,  
+                             DTOutput("jual_enroute_table")
+                           ),
+                           box(
+                             title = "Penjualan Terminal Navigation",
+                             status = "info",
+                             solidHeader = TRUE,
+                             width = 6,  
+                             DTOutput("jual_tnc_table")
+                           )
+                         ),
+                         fluidRow(
+                           box(
+                             title = "Pendapatan Enroute (RU)",
+                             status = "info",
+                             solidHeader = TRUE,
+                             width = 6,  
+                             DTOutput("dapat_enroute_table")
+                           ),
+                           box(
+                             title = "Pendapatan Terminal Navigation",
+                             status = "info",
+                             solidHeader = TRUE,
+                             width = 6,  
+                             DTOutput("dapat_tnc_table")
+                           )
+                         )
                 )
               )
-            )
         )
+    )
   )
 )
